@@ -64,7 +64,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private object? _lyricsWebViewControl;
     private EventInfo? _lyricsNavigationCompletedEvent;
     private Delegate? _lyricsNavigationCompletedHandler;
-    private bool _usingCompositionWebView;
     private DateTimeOffset _nextTickDiagnosticsLogUtc;
 
     public MainWindow()
@@ -837,13 +836,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "TaskbarLyrics",
                 "WebView2");
             Directory.CreateDirectory(webViewUserDataFolder);
-            var environmentOptions = _usingCompositionWebView
-                ? new CoreWebView2EnvironmentOptions("--disable-gpu --disable-gpu-compositing")
-                : new CoreWebView2EnvironmentOptions("--disable-gpu");
             var webViewEnvironment = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
-                userDataFolder: webViewUserDataFolder,
-                options: environmentOptions);
+                userDataFolder: webViewUserDataFolder);
 
             await EnsureCoreWebView2Async(webViewControl, webViewEnvironment);
             TrySetDefaultBackgroundColor(webViewControl, System.Drawing.Color.Transparent);
@@ -1019,7 +1014,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         object control = new WebView2();
-        _usingCompositionWebView = false;
 
         if (control is not FrameworkElement element || control is not UIElement uiElement)
         {

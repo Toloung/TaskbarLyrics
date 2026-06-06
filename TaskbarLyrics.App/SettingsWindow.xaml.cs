@@ -1,15 +1,17 @@
-﻿using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Linq;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Microsoft.Web.WebView2.Core;
 using TaskbarLyrics.Core.Services;
 using TaskbarLyrics.Core.Utilities;
+using Drawing = System.Drawing;
+using Forms = System.Windows.Forms;
 
 namespace TaskbarLyrics.App;
 
@@ -18,48 +20,40 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     private const string DefaultFontFamily =
         "SF Pro Display, SF Pro Text, Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
 
-    private readonly AppSettings _settings;
-    private readonly ObservableCollection<RecognitionSourceItem> _recognitionOrderItems = new();
-    private readonly System.Windows.Threading.DispatcherTimer _liveApplyTimer = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        Interval = TimeSpan.FromMilliseconds(250)
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
     };
 
-    private System.Windows.Point _recognitionDragStartPoint;
-    private RecognitionSourceItem? _draggedRecognitionItem;
+    private readonly AppSettings _settings;
+    private bool _isWebReady;
 
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
         _settings = settings;
 
-        _liveApplyTimer.Tick += LiveApplyTimer_Tick;
         SourceInitialized += SettingsWindow_SourceInitialized;
         Loaded += SettingsWindow_Loaded;
         Activated += SettingsWindow_Activated;
         StateChanged += SettingsWindow_StateChanged;
-
-        PopulateFontFamilyOptions();
-        LoadFromSettings();
-        AttachLiveSettingsHandlers();
+        Closed += SettingsWindow_Closed;
     }
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
     {
-        Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic, true);
-        ApplyWindowsBackdrop();
-        ScheduleWindowsBackdropRefresh();
+        ApplyWindowChromeAttributes();
     }
 
-    private void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
+    private async void SettingsWindow_Loaded(object? sender, RoutedEventArgs e)
     {
-        ScheduleWindowsBackdropRefresh();
+        await InitializeSettingsWebViewAsync();
     }
 
     private void SettingsWindow_Activated(object? sender, EventArgs e)
     {
-        ApplyWindowsBackdrop();
-        ScheduleWindowsBackdropRefresh();
+        ApplyWindowChromeAttributes();
     }
 
     private void SettingsWindow_StateChanged(object? sender, EventArgs e)
@@ -67,7 +61,388 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         UpdateMaximizeRestoreIcon();
     }
 
-    private void CaptionDragArea_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void SettingsWindow_Closed(object? sender, EventArgs e)
+    {
+        if (SettingsWebView.CoreWebView2 is not null)
+        {
+            SettingsWebView.CoreWebView2.WebMessageReceived -= SettingsWebView_WebMessageReceived;
+        }
+    }
+
+    private async Task InitializeSettingsWebViewAsync()
+    {
+        if (_isWebReady)
+        {
+            return;
+        }
+
+        var userDataFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TaskbarLyrics",
+            "WebView2",
+            "Settings");
+        var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+        await SettingsWebView.EnsureCoreWebView2Async(environment);
+
+        var core = SettingsWebView.CoreWebView2;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.IsZoomControlEnabled = false;
+        core.Settings.IsBuiltInErrorPageEnabled = false;
+        core.WebMessageReceived += SettingsWebView_WebMessageReceived;
+
+        var htmlPath = Path.Combine(AppContext.BaseDirectory, "Web", "Settings", "settings.html");
+        SettingsWebView.Source = new Uri(htmlPath);
+        _isWebReady = true;
+    }
+
+    private async void SettingsWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        var messageJson = e.TryGetWebMessageAsString();
+        if (string.IsNullOrWhiteSpace(messageJson))
+        {
+            messageJson = e.WebMessageAsJson;
+        }
+
+        var message = JsonSerializer.Deserialize<WebSettingsMessage>(messageJson, JsonOptions);
+        if (message?.Type is null)
+        {
+            return;
+        }
+
+        switch (message.Type)
+        {
+            case "ready":
+                await PushSettingsToWebAsync();
+                break;
+            case "update":
+                ApplyWebSettingUpdate(message.Key, message.Value);
+                SaveSettings();
+                break;
+            case "reorderSources":
+                ApplySourceOrder(message.Value);
+                SaveSettings();
+                break;
+            case "resetDefaults":
+                CopySettings(new AppSettings(), _settings);
+                SaveSettings();
+                await PushSettingsToWebAsync();
+                break;
+            case "clearCache":
+                ClearLyricCache();
+                break;
+            case "pickColor":
+                await PickForegroundColorAsync();
+                break;
+        }
+    }
+
+    private async Task PushSettingsToWebAsync()
+    {
+        if (!_isWebReady || SettingsWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var payload = CreateSettingsPayload();
+        var settingsJson = JsonSerializer.Serialize(payload, JsonOptions);
+        var fontsJson = JsonSerializer.Serialize(GetFontFamilies(), JsonOptions);
+        await SettingsWebView.ExecuteScriptAsync($"window.settingsApp?.setState({settingsJson}, {fontsJson});");
+    }
+
+    private WebSettingsPayload CreateSettingsPayload()
+    {
+        return new WebSettingsPayload
+        {
+            SourceRecognitionOrder = NormalizeSourceOrder(_settings.SourceRecognitionOrder),
+            EnableNetease = _settings.EnableNetease,
+            EnableQQMusic = _settings.EnableQQMusic,
+            EnableKugou = _settings.EnableKugou,
+            EnableSpotify = _settings.EnableSpotify,
+            ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
+            ShowLyricTranslation = _settings.ShowLyricTranslation,
+            FontSize = _settings.FontSize,
+            FontFamily = ResolveInstalledFontFamily(_settings.FontFamily) ?? ResolveInstalledFontFamily(DefaultFontFamily) ?? "Microsoft YaHei UI",
+            FontWeight = NormalizeFontWeight(_settings.FontWeight),
+            ForegroundColor = _settings.ForegroundColor,
+            ShowBackground = _settings.ShowBackground,
+            BackgroundOpacity = _settings.BackgroundOpacity,
+            ShowBorder = _settings.ShowBorder,
+            WindowWidth = _settings.WindowWidth,
+            HorizontalAnchor = _settings.HorizontalAnchor,
+            XOffset = _settings.XOffset,
+            YOffset = _settings.YOffset,
+            EnableSmtcTimelineMonitor = _settings.EnableSmtcTimelineMonitor
+        };
+    }
+
+    private static List<string> NormalizeSourceOrder(IEnumerable<string>? order)
+    {
+        var known = new[] { "QQMusic", "Netease", "Kugou", "Spotify" };
+        var result = new List<string>();
+
+        foreach (var source in order ?? Enumerable.Empty<string>())
+        {
+            if (known.Contains(source) && !result.Contains(source))
+            {
+                result.Add(source);
+            }
+        }
+
+        foreach (var source in known)
+        {
+            if (!result.Contains(source))
+            {
+                result.Add(source);
+            }
+        }
+
+        return result;
+    }
+
+    private static List<string> GetFontFamilies()
+    {
+        return Fonts.SystemFontFamilies
+            .Select(x => x.Source)
+            .OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private string? ResolveInstalledFontFamily(string? fontFamily)
+    {
+        if (string.IsNullOrWhiteSpace(fontFamily))
+        {
+            return null;
+        }
+
+        var installed = GetFontFamilies().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return fontFamily.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(installed.Contains);
+    }
+
+    private static string NormalizeFontWeight(string? value)
+    {
+        return value?.Trim() switch
+        {
+            "Light" => "Light",
+            "Normal" => "Normal",
+            "Medium" => "Medium",
+            "SemiBold" => "SemiBold",
+            "Bold" => "Bold",
+            _ => "SemiBold"
+        };
+    }
+
+    private void ApplyWebSettingUpdate(string? key, JsonElement? value)
+    {
+        if (key is null || value is null)
+        {
+            return;
+        }
+
+        var element = value.Value;
+        switch (key)
+        {
+            case "enableQQMusic":
+                _settings.EnableQQMusic = ReadBool(element, _settings.EnableQQMusic);
+                break;
+            case "enableNetease":
+                _settings.EnableNetease = ReadBool(element, _settings.EnableNetease);
+                break;
+            case "enableKugou":
+                _settings.EnableKugou = ReadBool(element, _settings.EnableKugou);
+                break;
+            case "enableSpotify":
+                _settings.EnableSpotify = ReadBool(element, _settings.EnableSpotify);
+                break;
+            case "showLyricsOnStartup":
+                _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
+                break;
+            case "showLyricTranslation":
+                _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
+                break;
+            case "showBackground":
+                _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
+                break;
+            case "showBorder":
+                _settings.ShowBorder = ReadBool(element, _settings.ShowBorder);
+                break;
+            case "enableSmtcTimelineMonitor":
+                _settings.EnableSmtcTimelineMonitor = ReadBool(element, _settings.EnableSmtcTimelineMonitor);
+                break;
+            case "fontSize":
+                _settings.FontSize = Math.Clamp(ReadDouble(element, _settings.FontSize), 10, 40);
+                break;
+            case "fontFamily":
+                _settings.FontFamily = ReadString(element, _settings.FontFamily);
+                break;
+            case "fontWeight":
+                _settings.FontWeight = NormalizeFontWeight(ReadString(element, _settings.FontWeight));
+                break;
+            case "foregroundColor":
+                _settings.ForegroundColor = NormalizeColor(ReadString(element, _settings.ForegroundColor));
+                break;
+            case "backgroundOpacity":
+                _settings.BackgroundOpacity = Math.Clamp(ReadDouble(element, _settings.BackgroundOpacity), 0, 1);
+                break;
+            case "windowWidth":
+                _settings.WindowWidth = Math.Clamp(ReadDouble(element, _settings.WindowWidth), 320, 1400);
+                break;
+            case "horizontalAnchor":
+                if (Enum.TryParse<LyricsHorizontalAnchor>(ReadString(element, _settings.HorizontalAnchor.ToString()), out var anchor))
+                {
+                    _settings.HorizontalAnchor = anchor;
+                }
+                break;
+            case "xOffset":
+                _settings.XOffset = Math.Clamp(ReadDouble(element, _settings.XOffset), -2000, 2000);
+                break;
+            case "yOffset":
+                _settings.YOffset = Math.Clamp(ReadDouble(element, _settings.YOffset), -2000, 2000);
+                break;
+        }
+    }
+
+    private void ApplySourceOrder(JsonElement? value)
+    {
+        if (value is null || value.Value.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        _settings.SourceRecognitionOrder = NormalizeSourceOrder(value.Value.EnumerateArray()
+            .Select(x => x.GetString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!));
+    }
+
+    private async Task PickForegroundColorAsync()
+    {
+        using var dialog = new Forms.ColorDialog
+        {
+            FullOpen = true
+        };
+
+        if (TryParseMediaColor(_settings.ForegroundColor, out var currentColor))
+        {
+            dialog.Color = Drawing.Color.FromArgb(currentColor.R, currentColor.G, currentColor.B);
+        }
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK)
+        {
+            return;
+        }
+
+        _settings.ForegroundColor = $"#FF{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        SaveSettings();
+        await PushSettingsToWebAsync();
+    }
+
+    private void ClearLyricCache()
+    {
+        LyricProviderBase.ClearCache();
+        LrcLibLyricProvider.ClearCache();
+        GenericSmtcLyricProvider.ClearCache();
+    }
+
+    private void SaveSettings()
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            app.SaveSettings(_settings.Clone());
+        }
+    }
+
+    private static bool ReadBool(JsonElement element, bool fallback)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(element.GetString(), out var value) => value,
+            _ => fallback
+        };
+    }
+
+    private static double ReadDouble(JsonElement element, double fallback)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Number when element.TryGetDouble(out var value) => value,
+            JsonValueKind.String when double.TryParse(element.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) => value,
+            _ => fallback
+        };
+    }
+
+    private static string ReadString(JsonElement element, string fallback)
+    {
+        return element.ValueKind == JsonValueKind.String
+            ? element.GetString() ?? fallback
+            : fallback;
+    }
+
+    private static string NormalizeColor(string color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return "#FFFFFFFF";
+        }
+
+        var trimmed = color.Trim();
+        return trimmed.Length == 7 && trimmed.StartsWith('#')
+            ? $"#FF{trimmed[1..]}"
+            : trimmed;
+    }
+
+    private static bool TryParseMediaColor(string? color, out System.Windows.Media.Color parsedColor)
+    {
+        parsedColor = Colors.White;
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (System.Windows.Media.ColorConverter.ConvertFromString(color.Trim()) is System.Windows.Media.Color mediaColor)
+            {
+                parsedColor = mediaColor;
+                return true;
+            }
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static void CopySettings(AppSettings source, AppSettings target)
+    {
+        target.SourceRecognitionOrder = source.SourceRecognitionOrder.ToList();
+        target.EnableNetease = source.EnableNetease;
+        target.EnableQQMusic = source.EnableQQMusic;
+        target.EnableKugou = source.EnableKugou;
+        target.EnableSpotify = source.EnableSpotify;
+        target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
+        target.ShowLyricTranslation = source.ShowLyricTranslation;
+        target.FontSize = source.FontSize;
+        target.FontFamily = source.FontFamily;
+        target.FontWeight = source.FontWeight;
+        target.ForegroundColor = source.ForegroundColor;
+        target.ShowBackground = source.ShowBackground;
+        target.BackgroundOpacity = source.BackgroundOpacity;
+        target.ShowBorder = source.ShowBorder;
+        target.WindowWidth = source.WindowWidth;
+        target.HorizontalAnchor = source.HorizontalAnchor;
+        target.XOffset = source.XOffset;
+        target.YOffset = source.YOffset;
+        target.EnableSmtcTimelineMonitor = source.EnableSmtcTimelineMonitor;
+    }
+
+    private void CaptionDragArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)
         {
@@ -77,8 +452,20 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         if (e.ButtonState == MouseButtonState.Pressed)
         {
-            DragMove();
+            BeginNativeWindowDrag();
         }
+    }
+
+    private void BeginNativeWindowDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _ = ReleaseCapture();
+        _ = SendMessage(hwnd, WindowMessageNonClientLeftButtonDown, HitTestCaption, 0);
     }
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
@@ -96,6 +483,14 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         Close();
     }
 
+    private void ToggleMaximizeRestore()
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+        UpdateMaximizeRestoreIcon();
+    }
+
     private void UpdateMaximizeRestoreIcon()
     {
         MaximizeRestoreIcon.Text = WindowState == WindowState.Maximized
@@ -103,475 +498,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             : "\uE922";
     }
 
-    private void ToggleMaximizeRestore()
-    {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
-    }
-
-    private void LoadFromSettings()
-    {
-        LoadRecognitionOrder(_settings.SourceRecognitionOrder);
-
-        QQMusicCheckBox.IsChecked = _settings.EnableQQMusic;
-        NeteaseCheckBox.IsChecked = _settings.EnableNetease;
-        KugouCheckBox.IsChecked = _settings.EnableKugou;
-        SpotifyCheckBox.IsChecked = _settings.EnableSpotify;
-        StartupCheckBox.IsChecked = _settings.ShowLyricsOnStartup;
-        LyricTranslationCheckBox.IsChecked = _settings.ShowLyricTranslation;
-        BackgroundCheckBox.IsChecked = _settings.ShowBackground;
-        BorderCheckBox.IsChecked = _settings.ShowBorder;
-        SmtcTimelineMonitorCheckBox.IsChecked = _settings.EnableSmtcTimelineMonitor;
-
-        FontSizeTextBox.Text = _settings.FontSize.ToString(CultureInfo.InvariantCulture);
-        FontFamilyComboBox.Text = ExtractPrimaryFontFamily(_settings.FontFamily);
-        FontWeightComboBox.SelectedIndex = NormalizeFontWeight(_settings.FontWeight) switch
-        {
-            "Light" => 0,
-            "Normal" => 1,
-            "Medium" => 2,
-            "SemiBold" => 3,
-            "Bold" => 4,
-            _ => 3
-        };
-        ForegroundColorTextBox.Text = _settings.ForegroundColor;
-        BackgroundOpacityTextBox.Text = _settings.BackgroundOpacity.ToString(CultureInfo.InvariantCulture);
-        WindowWidthTextBox.Text = _settings.WindowWidth.ToString(CultureInfo.InvariantCulture);
-        XOffsetTextBox.Text = _settings.XOffset.ToString(CultureInfo.InvariantCulture);
-        YOffsetTextBox.Text = _settings.YOffset.ToString(CultureInfo.InvariantCulture);
-
-        AnchorComboBox.SelectedIndex = _settings.HorizontalAnchor switch
-        {
-            LyricsHorizontalAnchor.Left => 0,
-            LyricsHorizontalAnchor.Center => 1,
-            _ => 2
-        };
-    }
-
-    private void AttachLiveSettingsHandlers()
-    {
-        AttachToggleHandler(QQMusicCheckBox);
-        AttachToggleHandler(NeteaseCheckBox);
-        AttachToggleHandler(KugouCheckBox);
-        AttachToggleHandler(SpotifyCheckBox);
-        AttachToggleHandler(StartupCheckBox);
-        AttachToggleHandler(LyricTranslationCheckBox);
-        AttachToggleHandler(BackgroundCheckBox);
-        AttachToggleHandler(BorderCheckBox);
-        AttachToggleHandler(SmtcTimelineMonitorCheckBox);
-
-        FontSizeTextBox.TextChanged += SettingsControl_Changed;
-        ForegroundColorTextBox.TextChanged += SettingsControl_Changed;
-        BackgroundOpacityTextBox.TextChanged += SettingsControl_Changed;
-        WindowWidthTextBox.TextChanged += SettingsControl_Changed;
-        XOffsetTextBox.TextChanged += SettingsControl_Changed;
-        YOffsetTextBox.TextChanged += SettingsControl_Changed;
-
-        FontFamilyComboBox.SelectionChanged += SettingsControl_Changed;
-        FontFamilyComboBox.LostKeyboardFocus += SettingsControl_Changed;
-        FontWeightComboBox.SelectionChanged += SettingsControl_Changed;
-        AnchorComboBox.SelectionChanged += SettingsControl_Changed;
-    }
-
-    private void AttachToggleHandler(System.Windows.Controls.CheckBox toggle)
-    {
-        toggle.Checked += SettingsControl_Changed;
-        toggle.Unchecked += SettingsControl_Changed;
-    }
-
-    private void SettingsControl_Changed(object sender, EventArgs e)
-    {
-        ScheduleLiveApply();
-    }
-
-    private void ScheduleLiveApply()
-    {
-        _liveApplyTimer.Stop();
-        _liveApplyTimer.Start();
-    }
-
-    private void LiveApplyTimer_Tick(object? sender, EventArgs e)
-    {
-        _liveApplyTimer.Stop();
-        _ = ApplySettingsFromControls();
-    }
-
-    private bool ApplySettingsFromControls()
-    {
-        if (!TryReadDouble(FontSizeTextBox, 10, 40, out var fontSize) ||
-            !TryReadDouble(BackgroundOpacityTextBox, 0, 1, out var backgroundOpacity) ||
-            !TryReadDouble(WindowWidthTextBox, 320, 1400, out var windowWidth) ||
-            !TryReadDouble(XOffsetTextBox, -2000, 2000, out var xOffset) ||
-            !TryReadDouble(YOffsetTextBox, -2000, 2000, out var yOffset))
-        {
-            return false;
-        }
-
-        _settings.SourceRecognitionOrder = _recognitionOrderItems.Select(x => x.SourceKey).ToList();
-        _settings.EnableQQMusic = QQMusicCheckBox.IsChecked == true;
-        _settings.EnableNetease = NeteaseCheckBox.IsChecked == true;
-        _settings.EnableKugou = KugouCheckBox.IsChecked == true;
-        _settings.EnableSpotify = SpotifyCheckBox.IsChecked == true;
-        _settings.ShowLyricsOnStartup = StartupCheckBox.IsChecked == true;
-        _settings.ShowLyricTranslation = LyricTranslationCheckBox.IsChecked == true;
-        _settings.ShowBackground = BackgroundCheckBox.IsChecked == true;
-        _settings.ShowBorder = BorderCheckBox.IsChecked == true;
-        _settings.EnableSmtcTimelineMonitor = SmtcTimelineMonitorCheckBox.IsChecked == true;
-        _settings.FontSize = fontSize;
-        _settings.FontFamily = string.IsNullOrWhiteSpace(FontFamilyComboBox.Text)
-            ? DefaultFontFamily
-            : FontFamilyComboBox.Text.Trim();
-        _settings.FontWeight = FontWeightComboBox.SelectedIndex switch
-        {
-            0 => "Light",
-            1 => "Normal",
-            2 => "Medium",
-            3 => "SemiBold",
-            4 => "Bold",
-            _ => "SemiBold"
-        };
-        _settings.ForegroundColor = string.IsNullOrWhiteSpace(ForegroundColorTextBox.Text)
-            ? "#FFFFFFFF"
-            : ForegroundColorTextBox.Text.Trim();
-        _settings.BackgroundOpacity = backgroundOpacity;
-        _settings.WindowWidth = windowWidth;
-        _settings.XOffset = xOffset;
-        _settings.YOffset = yOffset;
-        _settings.HorizontalAnchor = AnchorComboBox.SelectedIndex switch
-        {
-            0 => LyricsHorizontalAnchor.Left,
-            1 => LyricsHorizontalAnchor.Center,
-            _ => LyricsHorizontalAnchor.Right
-        };
-
-        if (System.Windows.Application.Current is App app)
-        {
-            app.SaveSettings(_settings.Clone());
-        }
-
-        return true;
-    }
-
-    private void RecognitionNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        SelectNavigationButton(RecognitionNavButton);
-        ScrollToSection(RecognitionSection);
-    }
-
-    private void DisplayNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        SelectNavigationButton(DisplayNavButton);
-        ScrollToSection(DisplaySection);
-    }
-
-    private void FontNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        SelectNavigationButton(FontNavButton);
-        ScrollToSection(FontSection);
-    }
-
-    private void LayoutNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        SelectNavigationButton(LayoutNavButton);
-        ScrollToSection(LayoutSection);
-    }
-
-    private void DebugNavButton_Click(object sender, RoutedEventArgs e)
-    {
-        SelectNavigationButton(DebugNavButton);
-        ScrollToSection(DebugSection);
-    }
-
-    private void SettingsContentScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
-    {
-        if (e.VerticalChange == 0 && e.ExtentHeightChange == 0)
-        {
-            return;
-        }
-
-        UpdateSelectedNavigationFromScroll();
-    }
-
-    private void SelectNavigationButton(System.Windows.Controls.Button selectedButton)
-    {
-        RecognitionNavButton.Tag = ReferenceEquals(selectedButton, RecognitionNavButton) ? "Selected" : null;
-        DisplayNavButton.Tag = ReferenceEquals(selectedButton, DisplayNavButton) ? "Selected" : null;
-        FontNavButton.Tag = ReferenceEquals(selectedButton, FontNavButton) ? "Selected" : null;
-        LayoutNavButton.Tag = ReferenceEquals(selectedButton, LayoutNavButton) ? "Selected" : null;
-        DebugNavButton.Tag = ReferenceEquals(selectedButton, DebugNavButton) ? "Selected" : null;
-    }
-
-    private void ScrollToSection(FrameworkElement section)
-    {
-        if (!section.IsLoaded)
-        {
-            return;
-        }
-
-        var relativePosition = section.TransformToAncestor(SettingsContentScrollViewer)
-            .Transform(new System.Windows.Point(0, 0));
-        SettingsContentScrollViewer.ScrollToVerticalOffset(SettingsContentScrollViewer.VerticalOffset + relativePosition.Y - 16);
-    }
-
-    private void UpdateSelectedNavigationFromScroll()
-    {
-        var candidates = new[]
-        {
-            (Section: RecognitionSection, Button: RecognitionNavButton),
-            (Section: DisplaySection, Button: DisplayNavButton),
-            (Section: FontSection, Button: FontNavButton),
-            (Section: LayoutSection, Button: LayoutNavButton),
-            (Section: DebugSection, Button: DebugNavButton)
-        };
-
-        var selectedButton = candidates[0].Button;
-        var bestDistance = double.MaxValue;
-
-        foreach (var (section, button) in candidates)
-        {
-            if (!section.IsLoaded)
-            {
-                continue;
-            }
-
-            var y = section.TransformToAncestor(SettingsContentScrollViewer)
-                .Transform(new System.Windows.Point(0, 0))
-                .Y;
-            var distance = Math.Abs(y - 24);
-
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                selectedButton = button;
-            }
-        }
-
-        SelectNavigationButton(selectedButton);
-    }
-
-    private void ClearLyricCacheButton_Click(object sender, RoutedEventArgs e)
-    {
-        LyricProviderBase.ClearCache();
-        LrcLibLyricProvider.ClearCache();
-        GenericSmtcLyricProvider.ClearCache();
-        System.Windows.MessageBox.Show("歌词缓存已清除。", "TaskbarLyrics 设置", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private void PopulateFontFamilyOptions()
-    {
-        FontFamilyComboBox.ItemsSource = Fonts.SystemFontFamilies
-            .Select(x => x.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    private void LoadRecognitionOrder(IReadOnlyList<string>? configuredOrder)
-    {
-        _recognitionOrderItems.Clear();
-        foreach (var key in NormalizeRecognitionOrder(configuredOrder))
-        {
-            _recognitionOrderItems.Add(new RecognitionSourceItem(key, ToDisplayName(key)));
-        }
-
-        RecognitionOrderListBox.ItemsSource = _recognitionOrderItems;
-    }
-
-    private static List<string> NormalizeRecognitionOrder(IReadOnlyList<string>? configuredOrder)
-    {
-        var defaults = new[] { "QQMusic", "Netease", "Kugou", "Spotify" };
-        var result = new List<string>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        if (configuredOrder is not null)
-        {
-            foreach (var item in configuredOrder)
-            {
-                var normalized = NormalizeRecognitionSource(item);
-                if (!string.IsNullOrWhiteSpace(normalized) && seen.Add(normalized))
-                {
-                    result.Add(normalized);
-                }
-            }
-        }
-
-        foreach (var item in defaults)
-        {
-            if (seen.Add(item))
-            {
-                result.Add(item);
-            }
-        }
-
-        return result;
-    }
-
-    private static string NormalizeRecognitionSource(string? source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            return string.Empty;
-        }
-
-        var trimmed = source.Trim();
-        if (trimmed.Contains("qqmusic", StringComparison.OrdinalIgnoreCase))
-        {
-            return "QQMusic";
-        }
-
-        if (trimmed.Contains("netease", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("cloudmusic", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Netease";
-        }
-
-        if (trimmed.Contains("kugou", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Kugou";
-        }
-
-        if (trimmed.Contains("spotify", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Spotify";
-        }
-
-        return string.Empty;
-    }
-
-    private static string ToDisplayName(string source)
-    {
-        return source switch
-        {
-            "QQMusic" => "QQ音乐",
-            "Netease" => "网易云音乐",
-            "Kugou" => "酷狗音乐",
-            "Spotify" => "Spotify",
-            _ => source
-        };
-    }
-
-    private void RecognitionOrderListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _recognitionDragStartPoint = e.GetPosition(null);
-        _draggedRecognitionItem = FindRecognitionItem(e.OriginalSource as DependencyObject);
-    }
-
-    private void RecognitionOrderListBox_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || _draggedRecognitionItem is null)
-        {
-            return;
-        }
-
-        var currentPosition = e.GetPosition(null);
-        if (Math.Abs(currentPosition.X - _recognitionDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
-            Math.Abs(currentPosition.Y - _recognitionDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
-        {
-            return;
-        }
-
-        DragDrop.DoDragDrop(RecognitionOrderListBox, _draggedRecognitionItem, System.Windows.DragDropEffects.Move);
-    }
-
-    private void RecognitionOrderListBox_DragOver(object sender, System.Windows.DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(typeof(RecognitionSourceItem))
-            ? System.Windows.DragDropEffects.Move
-            : System.Windows.DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void RecognitionOrderListBox_Drop(object sender, System.Windows.DragEventArgs e)
-    {
-        if (!e.Data.GetDataPresent(typeof(RecognitionSourceItem)) ||
-            e.Data.GetData(typeof(RecognitionSourceItem)) is not RecognitionSourceItem sourceItem)
-        {
-            return;
-        }
-
-        var targetItem = FindRecognitionItem(e.OriginalSource as DependencyObject);
-        if (targetItem is null || ReferenceEquals(sourceItem, targetItem))
-        {
-            return;
-        }
-
-        var fromIndex = _recognitionOrderItems.IndexOf(sourceItem);
-        var toIndex = _recognitionOrderItems.IndexOf(targetItem);
-        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
-        {
-            return;
-        }
-
-        _recognitionOrderItems.Move(fromIndex, toIndex);
-        RecognitionOrderListBox.SelectedItem = sourceItem;
-        ScheduleLiveApply();
-    }
-
-    private RecognitionSourceItem? FindRecognitionItem(DependencyObject? origin)
-    {
-        var current = origin;
-        while (current is not null)
-        {
-            if (current is FrameworkElement { DataContext: RecognitionSourceItem item })
-            {
-                return item;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
-
-    private static string NormalizeFontWeight(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "Normal";
-        }
-
-        return value.Trim() switch
-        {
-            "Light" => "Light",
-            "Normal" => "Normal",
-            "Medium" => "Medium",
-            "SemiBold" => "SemiBold",
-            "Bold" => "Bold",
-            _ => "Normal"
-        };
-    }
-
-    private static string ExtractPrimaryFontFamily(string? fontFamily)
-    {
-        if (string.IsNullOrWhiteSpace(fontFamily))
-        {
-            return string.Empty;
-        }
-
-        var first = fontFamily.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
-        return string.IsNullOrWhiteSpace(first) ? fontFamily.Trim() : first;
-    }
-
-    private static bool TryReadDouble(System.Windows.Controls.TextBox input, double min, double max, out double value)
-    {
-        value = 0;
-        if (!double.TryParse(input.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return false;
-        }
-
-        value = Math.Clamp(parsed, min, max);
-        return true;
-    }
-
-    private void ScheduleWindowsBackdropRefresh()
-    {
-        _ = Dispatcher.BeginInvoke(ApplyWindowsBackdrop, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-    }
-
-    private void ApplyWindowsBackdrop()
+    private void ApplyWindowChromeAttributes()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero)
@@ -581,7 +508,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
         {
-            compositionTarget.BackgroundColor = Colors.Transparent;
+            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(7, 14, 29);
         }
 
         var darkMode = 1;
@@ -589,92 +516,52 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         var cornerPreference = DwmWindowCornerPreferenceRound;
         _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeWindowCornerPreference, ref cornerPreference, Marshal.SizeOf<int>());
-
-        Wpf.Ui.Controls.WindowBackdrop.RemoveBackground(this);
-        var backdropApplied = Wpf.Ui.Controls.WindowBackdrop.ApplyBackdrop(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic);
-        Log.Warn($"SettingsWindow backdrop: applied={backdropApplied}, hwnd=0x{hwnd.ToInt64():X}");
-
-        if (!backdropApplied)
-        {
-            ApplyAcrylicBlur(hwnd);
-        }
-    }
-
-    private static void ApplyAcrylicBlur(IntPtr hwnd)
-    {
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10))
-        {
-            return;
-        }
-
-        var accentPolicy = new AccentPolicy
-        {
-            AccentState = AccentState.EnableAcrylicBlurBehind,
-            AccentFlags = 0,
-            GradientColor = unchecked((int)0xCC0B1220)
-        };
-
-        var accentPolicySize = Marshal.SizeOf<AccentPolicy>();
-        var accentPolicyPointer = Marshal.AllocHGlobal(accentPolicySize);
-        try
-        {
-            Marshal.StructureToPtr(accentPolicy, accentPolicyPointer, false);
-            var data = new WindowCompositionAttributeData
-            {
-                Attribute = WindowCompositionAttribute.AccentPolicy,
-                SizeOfData = accentPolicySize,
-                Data = accentPolicyPointer
-            };
-
-            _ = SetWindowCompositionAttribute(hwnd, ref data);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(accentPolicyPointer);
-        }
     }
 
     private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
     private const int DwmWindowAttributeWindowCornerPreference = 33;
     private const int DwmWindowCornerPreferenceRound = 2;
+    private const int WindowMessageNonClientLeftButtonDown = 0x00A1;
+    private const int HitTestCaption = 2;
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 
     [DllImport("user32.dll", PreserveSig = true)]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+    private static extern bool ReleaseCapture();
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowCompositionAttributeData
+    [DllImport("user32.dll", PreserveSig = true)]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int message, int wParam, int lParam);
+
+    private sealed class WebSettingsMessage
     {
-        public WindowCompositionAttribute Attribute;
-        public IntPtr Data;
-        public int SizeOfData;
+        public string? Type { get; set; }
+
+        public string? Key { get; set; }
+
+        public JsonElement? Value { get; set; }
     }
 
-    private enum WindowCompositionAttribute
+    private sealed class WebSettingsPayload
     {
-        AccentPolicy = 19
+        public List<string> SourceRecognitionOrder { get; set; } = new();
+        public bool EnableNetease { get; set; }
+        public bool EnableQQMusic { get; set; }
+        public bool EnableKugou { get; set; }
+        public bool EnableSpotify { get; set; }
+        public bool ShowLyricsOnStartup { get; set; }
+        public bool ShowLyricTranslation { get; set; }
+        public double FontSize { get; set; }
+        public string FontFamily { get; set; } = "";
+        public string FontWeight { get; set; } = "";
+        public string ForegroundColor { get; set; } = "";
+        public bool ShowBackground { get; set; }
+        public double BackgroundOpacity { get; set; }
+        public bool ShowBorder { get; set; }
+        public double WindowWidth { get; set; }
+        public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
+        public double XOffset { get; set; }
+        public double YOffset { get; set; }
+        public bool EnableSmtcTimelineMonitor { get; set; }
     }
-
-    private enum AccentState
-    {
-        Disabled = 0,
-        EnableGradient = 1,
-        EnableTransparentGradient = 2,
-        EnableBlurBehind = 3,
-        EnableAcrylicBlurBehind = 4
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AccentPolicy
-    {
-        public AccentState AccentState;
-        public int AccentFlags;
-        public int GradientColor;
-        public int AnimationId;
-    }
-
-    private sealed record RecognitionSourceItem(string SourceKey, string DisplayName);
 }
-
