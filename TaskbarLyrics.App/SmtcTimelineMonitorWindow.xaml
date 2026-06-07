@@ -1,11 +1,14 @@
 <Window x:Class="TaskbarLyrics.App.SmtcTimelineMonitorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{x:Null}"
         Title="SMTC Timeline Monitor"
         Width="620"
         Height="380"
         MinWidth="480"
         MinHeight="280"
+        Background="#202020"
+        Foreground="#F8FAFC"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -15,6 +18,10 @@
 
         <TextBox x:Name="TimelineTextBox"
                  Grid.Row="0"
+                 Background="#2D2D2D"
+                 Foreground="#F8FAFC"
+                 BorderBrush="#3F3F3F"
+                 Padding="6"
                  FontFamily="Consolas"
                  FontSize="13"
                  IsReadOnly="True"
