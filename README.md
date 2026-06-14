@@ -34,7 +34,7 @@ TaskbarLyrics 会优先使用当前播放器对应的歌词源；如果短时间
 
 ## 安装
 ### 方式一：Release 下载
-在 [Releases](../../releases) 下载最新版本压缩包，完整解压后运行 `TaskbarLyrics.App.exe`。
+在 [Releases](../../releases) 下载最新版本压缩包，完整解压后运行 `TaskbarLyrics.exe`。
 
 请不要只单独复制或运行 exe，发布包中的 `Assets`、`Web` 等目录也是运行所需文件。
 
