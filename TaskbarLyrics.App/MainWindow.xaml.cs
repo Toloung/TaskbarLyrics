@@ -36,7 +36,7 @@ public partial class MainWindow : Window
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
     private string? _currentCoverDataUri;
-    private string _currentCoverFallbackText = "N";
+    private string _currentCoverFallbackText = "♫";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private bool _enableSmtcTimelineMonitor;
     private bool _enablePureMusicSpectrum = true;
@@ -475,22 +475,22 @@ public partial class MainWindow : Window
     {
         if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
         {
-            return ("Q", Media.Color.FromRgb(41, 182, 246));
+            return ("♫", Media.Color.FromRgb(41, 182, 246));
         }
 
         if (sourceApp.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
         {
-            return ("S", Media.Color.FromRgb(30, 215, 96));
+            return ("♫", Media.Color.FromRgb(30, 215, 96));
         }
 
         if (sourceApp.Equals("Netease", StringComparison.OrdinalIgnoreCase))
         {
-            return ("N", Media.Color.FromRgb(229, 57, 53));
+            return ("♫", Media.Color.FromRgb(229, 57, 53));
         }
 
         if (sourceApp.Equals("Kugou", StringComparison.OrdinalIgnoreCase))
         {
-            return ("K", Media.Color.FromRgb(52, 152, 219));
+            return ("♫", Media.Color.FromRgb(52, 152, 219));
         }
 
         return ("♫", Media.Color.FromRgb(99, 102, 241));

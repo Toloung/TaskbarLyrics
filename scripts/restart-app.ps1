@@ -8,8 +8,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solutionPath = Join-Path $repoRoot "TaskbarLyrics.sln"
-$appExe = Join-Path $repoRoot "TaskbarLyrics.App\bin\$Configuration\$Framework\TaskbarLyrics.App.exe"
-$processName = "TaskbarLyrics.App"
+$appExe = Join-Path $repoRoot "TaskbarLyrics.App\bin\$Configuration\$Framework\TaskbarLyrics.exe"
+$processName = "TaskbarLyrics"
 
 $processes = Get-Process -Name $processName -ErrorAction SilentlyContinue
 foreach ($process in $processes) {

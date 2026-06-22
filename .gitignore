@@ -7,6 +7,7 @@ build/
 build_verify/
 build_verify_single/
 publish/
+dist/
 artifacts/
 
 # Visual Studio / Rider
@@ -36,6 +37,8 @@ coverage/
 *.temp
 *.cache
 tmp/
+.reasonix/
+reasonix.toml
 
 # OS files
 .DS_Store
