@@ -44,6 +44,8 @@ public sealed class AppSettings
 
     public bool ShowLyricsOnStartup { get; set; } = true;
 
+    public bool StartWithWindows { get; set; } = false;
+
     public bool ShowLyricTranslation { get; set; } = false;
 
     public bool EnablePureMusicSpectrum { get; set; } = true;
@@ -64,6 +66,8 @@ public sealed class AppSettings
 
     public double BackgroundOpacity { get; set; } = 0.55;
 
+    public bool UseCoverColorBackground { get; set; } = false;
+
     public bool ShowBorder { get; set; } = false;
 
     public bool ShowTextShadow { get; set; } = false;
@@ -71,6 +75,14 @@ public sealed class AppSettings
     public bool EnableFloatingWindowMode { get; set; } = false;
 
     public double WindowWidth { get; set; } = 420;
+
+    public double FloatingWindowWidth { get; set; } = 560;
+
+    public double FloatingWindowHeight { get; set; } = 72;
+
+    public double? FloatingWindowLeft { get; set; }
+
+    public double? FloatingWindowTop { get; set; }
 
     public LyricsHorizontalAnchor HorizontalAnchor { get; set; } = LyricsHorizontalAnchor.Left;
 

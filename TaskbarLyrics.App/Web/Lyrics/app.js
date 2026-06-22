@@ -49,6 +49,12 @@ let activeCoverImageEl = coverImageEl;
 let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
+let coverSurfaceColor = "";
+const styleState = {
+  surfaceColor: "transparent",
+  backgroundOpacity: 0.55,
+  useCoverColorBackground: false
+};
 let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
 let spectrumAnimationFrame = 0;
@@ -375,6 +381,95 @@ function applyFallbackCover(text, fallbackColor) {
   if (coverEl && fallbackColor && CSS.supports("color", fallbackColor)) {
     coverEl.style.backgroundColor = fallbackColor;
   }
+}
+
+function applySurfaceColor() {
+  const nextColor = styleState.useCoverColorBackground && coverSurfaceColor
+    ? coverSurfaceColor
+    : styleState.surfaceColor;
+
+  if (nextColor && CSS.supports("background-color", nextColor)) {
+    root.style.setProperty("--surface-color", nextColor);
+  }
+}
+
+function normalizeSurfaceChannel(value, min, max) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function setCoverSurfaceFromImage(image, generation) {
+  if (!styleState.useCoverColorBackground || !image) {
+    return;
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    const size = 18;
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) {
+      return;
+    }
+
+    context.drawImage(image, 0, 0, size, size);
+    const pixels = context.getImageData(0, 0, size, size).data;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let total = 0;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const alpha = pixels[i + 3];
+      if (alpha < 24) {
+        continue;
+      }
+
+      red += pixels[i];
+      green += pixels[i + 1];
+      blue += pixels[i + 2];
+      total++;
+    }
+
+    if (generation !== coverGeneration || total <= 0) {
+      return;
+    }
+
+    red /= total;
+    green /= total;
+    blue /= total;
+    const luminance = (red * 0.2126) + (green * 0.7152) + (blue * 0.0722);
+    const lift = luminance < 56 ? 1.45 : 1;
+    const soften = luminance > 214 ? 0.72 : 1;
+    red = normalizeSurfaceChannel(red * lift * soften, 24, 226);
+    green = normalizeSurfaceChannel(green * lift * soften, 24, 226);
+    blue = normalizeSurfaceChannel(blue * lift * soften, 24, 226);
+
+    coverSurfaceColor = `rgba(${red}, ${green}, ${blue}, ${clamp01(styleState.backgroundOpacity).toFixed(3)})`;
+    applySurfaceColor();
+  } catch {
+    coverSurfaceColor = "";
+    applySurfaceColor();
+  }
+}
+
+function refreshCoverSurfaceFromUri(uri) {
+  if (!styleState.useCoverColorBackground || !uri) {
+    coverSurfaceColor = "";
+    applySurfaceColor();
+    return;
+  }
+
+  const generation = coverGeneration;
+  const image = new Image();
+  image.onload = () => setCoverSurfaceFromImage(image, generation);
+  image.onerror = () => {
+    if (generation === coverGeneration) {
+      coverSurfaceColor = "";
+      applySurfaceColor();
+    }
+  };
+  image.src = uri;
 }
 
 function scheduleFallbackCoverUpdate(text, fallbackColor, onApplied) {
@@ -778,6 +873,7 @@ window.taskbarLyrics = {
     clearCoverUpdateTimer();
 
     if (uri.length > 0 && uri === currentCoverUri) {
+      refreshCoverSurfaceFromUri(uri);
       setCoverLoadingState(false);
       return;
     }
@@ -791,6 +887,7 @@ window.taskbarLyrics = {
           return;
         }
 
+        setCoverSurfaceFromImage(preloader, generation);
         crossfadeToCoverImage(uri, generation, () => setCoverLoadingState(false));
       };
       preloader.onerror = () => {
@@ -798,6 +895,8 @@ window.taskbarLyrics = {
           return;
         }
 
+        coverSurfaceColor = "";
+        applySurfaceColor();
         scheduleFallbackCoverUpdate(text, fallbackColor, () => {
           if (coverFallbackEl) {
             coverFallbackEl.style.display = "flex";
@@ -819,6 +918,8 @@ window.taskbarLyrics = {
       return;
     }
 
+    coverSurfaceColor = "";
+    applySurfaceColor();
     scheduleFallbackCoverUpdate(text, fallbackColor, () => {
       if (coverFallbackEl) {
         coverFallbackEl.style.display = "flex";
@@ -850,8 +951,14 @@ window.taskbarLyrics = {
       root.style.setProperty("--secondary", payload.secondaryColor);
     }
 
-    if (payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)) {
-      root.style.setProperty("--surface-color", payload.surfaceColor);
+    styleState.surfaceColor = payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)
+      ? payload.surfaceColor
+      : "transparent";
+    styleState.backgroundOpacity = clamp01(payload.backgroundOpacity ?? styleState.backgroundOpacity);
+    styleState.useCoverColorBackground = Boolean(payload.useCoverColorBackground);
+    applySurfaceColor();
+    if (styleState.useCoverColorBackground && currentCoverUri) {
+      refreshCoverSurfaceFromUri(currentCoverUri);
     }
 
     if (payload.surfaceShadow && CSS.supports("box-shadow", payload.surfaceShadow)) {

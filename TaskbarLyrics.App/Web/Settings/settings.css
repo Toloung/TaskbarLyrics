@@ -136,6 +136,13 @@ body.light .sidebar {
   line-height: 1;
 }
 
+body.light .brand-icon {
+  color: #ffffff;
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .22);
+}
+
 .brand strong,
 .nav b {
   transition: opacity .14s ease, transform .18s cubic-bezier(.2, .8, .2, 1);
@@ -204,7 +211,9 @@ body.light .nav-item {
 }
 
 body.light .nav-item.active {
-  color: #0f172a;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, .12);
+  border-color: rgba(37, 99, 235, .28);
 }
 
 .nav-item.active::before {
@@ -260,11 +269,23 @@ body.light .nav-item:hover {
 }
 
 .header {
+  position: relative;
   height: 98px;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: start;
   padding: 18px 36px 0 40px;
+}
+
+body.light .header::before {
+  content: "";
+  position: absolute;
+  left: 40px;
+  right: 36px;
+  bottom: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, .72), rgba(14, 165, 233, .10));
 }
 
 h1,
@@ -359,6 +380,12 @@ small {
 
 body.light .card {
   background: linear-gradient(180deg, rgba(255, 255, 255, .95), var(--card));
+  border-color: rgba(37, 99, 235, .20);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, .07);
+}
+
+body.light h2 {
+  color: #1d4ed8;
 }
 
 .reveal {
@@ -438,6 +465,7 @@ body.light .card {
 body.light .player:hover,
 body.light .row:hover,
 body.light .form-row:hover {
+  border-color: rgba(37, 99, 235, .30);
   background: rgba(239, 246, 255, .95);
 }
 

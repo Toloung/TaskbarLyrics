@@ -6,6 +6,9 @@ namespace TaskbarLyrics.App;
 
 public partial class App : System.Windows.Application
 {
+    private const string StartupRunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string StartupRunValueName = "TaskbarLyrics";
+
     private SettingsStore? _settingsStore;
     private TrayService? _trayService;
     private SettingsWindow? _settingsWindow;
@@ -36,6 +39,7 @@ public partial class App : System.Windows.Application
         _settingsStore = new SettingsStore(settingsPath);
         Settings = _settingsStore.Load();
         ApplyStartupForegroundColor(Settings);
+        ApplyStartWithWindows(Settings.StartWithWindows);
 
         _lyricsWindowHost = new LyricsWindowHost(Settings);
 
@@ -64,7 +68,39 @@ public partial class App : System.Windows.Application
     {
         Settings = settings;
         _settingsStore?.Save(Settings);
+        ApplyStartWithWindows(Settings.StartWithWindows);
         _lyricsWindowHost?.ApplySettings(Settings);
+    }
+
+    private static void ApplyStartWithWindows(bool enabled)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRunKeyPath, writable: true)
+                ?? Registry.CurrentUser.CreateSubKey(StartupRunKeyPath, writable: true);
+            if (key is null)
+            {
+                return;
+            }
+
+            if (!enabled)
+            {
+                key.DeleteValue(StartupRunValueName, throwOnMissingValue: false);
+                return;
+            }
+
+            var executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                return;
+            }
+
+            key.SetValue(StartupRunValueName, $"\"{executablePath}\"", RegistryValueKind.String);
+        }
+        catch
+        {
+            // Startup registration is best-effort; the setting remains editable even if registry access fails.
+        }
     }
 
     internal static void ApplyStartupForegroundColor(AppSettings settings)

@@ -191,6 +191,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             EnableKugou = _settings.EnableKugou,
             EnableSpotify = _settings.EnableSpotify,
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
+            StartWithWindows = _settings.StartWithWindows,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
             UseLightSettingsWindow = _settings.UseLightSettingsWindow,
@@ -201,10 +202,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ForegroundColor = _settings.ForegroundColor,
             ShowBackground = _settings.ShowBackground,
             BackgroundOpacity = _settings.BackgroundOpacity,
+            UseCoverColorBackground = _settings.UseCoverColorBackground,
             ShowBorder = _settings.ShowBorder,
             ShowTextShadow = _settings.ShowTextShadow,
             EnableFloatingWindowMode = _settings.EnableFloatingWindowMode,
             WindowWidth = _settings.WindowWidth,
+            FloatingWindowWidth = _settings.FloatingWindowWidth,
+            FloatingWindowHeight = _settings.FloatingWindowHeight,
             HorizontalAnchor = _settings.HorizontalAnchor,
             XOffset = _settings.XOffset,
             YOffset = _settings.YOffset,
@@ -350,6 +354,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "showLyricsOnStartup":
                 _settings.ShowLyricsOnStartup = ReadBool(element, _settings.ShowLyricsOnStartup);
                 break;
+            case "startWithWindows":
+                _settings.StartWithWindows = ReadBool(element, _settings.StartWithWindows);
+                break;
             case "showLyricTranslation":
                 _settings.ShowLyricTranslation = ReadBool(element, _settings.ShowLyricTranslation);
                 break;
@@ -363,6 +370,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
+                break;
+            case "useCoverColorBackground":
+                _settings.UseCoverColorBackground = ReadBool(element, _settings.UseCoverColorBackground);
                 break;
             case "showBorder":
                 _settings.ShowBorder = ReadBool(element, _settings.ShowBorder);
@@ -565,6 +575,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.EnableKugou = source.EnableKugou;
         target.EnableSpotify = source.EnableSpotify;
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
+        target.StartWithWindows = source.StartWithWindows;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
         target.UseLightSettingsWindow = source.UseLightSettingsWindow;
@@ -575,10 +586,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ForegroundColor = source.ForegroundColor;
         target.ShowBackground = source.ShowBackground;
         target.BackgroundOpacity = source.BackgroundOpacity;
+        target.UseCoverColorBackground = source.UseCoverColorBackground;
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;
         target.EnableFloatingWindowMode = source.EnableFloatingWindowMode;
         target.WindowWidth = source.WindowWidth;
+        target.FloatingWindowWidth = source.FloatingWindowWidth;
+        target.FloatingWindowHeight = source.FloatingWindowHeight;
+        target.FloatingWindowLeft = source.FloatingWindowLeft;
+        target.FloatingWindowTop = source.FloatingWindowTop;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.XOffset = source.XOffset;
         target.YOffset = source.YOffset;
@@ -791,6 +807,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool EnableKugou { get; set; }
         public bool EnableSpotify { get; set; }
         public bool ShowLyricsOnStartup { get; set; }
+        public bool StartWithWindows { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public bool EnablePureMusicSpectrum { get; set; }
         public bool UseLightSettingsWindow { get; set; }
@@ -801,10 +818,13 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public string ForegroundColor { get; set; } = "";
         public bool ShowBackground { get; set; }
         public double BackgroundOpacity { get; set; }
+        public bool UseCoverColorBackground { get; set; }
         public bool ShowBorder { get; set; }
         public bool ShowTextShadow { get; set; }
         public bool EnableFloatingWindowMode { get; set; }
         public double WindowWidth { get; set; }
+        public double FloatingWindowWidth { get; set; }
+        public double FloatingWindowHeight { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public double XOffset { get; set; }
         public double YOffset { get; set; }

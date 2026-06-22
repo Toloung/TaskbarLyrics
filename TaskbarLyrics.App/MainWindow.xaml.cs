@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Interop;
 using Media = System.Windows.Media;
 using System.Windows.Threading;
@@ -41,6 +43,7 @@ public partial class MainWindow : Window
     private bool _enableSmtcTimelineMonitor;
     private bool _enablePureMusicSpectrum = true;
     private bool _enableFloatingWindowMode;
+    private bool _isAdjustingFloatingBounds;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
     private bool _isWebViewInitializing;
@@ -82,7 +85,13 @@ public partial class MainWindow : Window
 
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        SizeChanged += (_, _) => PositionLyricsWindow();
+        SizeChanged += (_, _) =>
+        {
+            if (!_enableFloatingWindowMode)
+            {
+                PositionLyricsWindow();
+            }
+        };
         IsVisibleChanged += OnIsVisibleChanged;
         Closing += OnClosing;
         Closed += OnClosed;
@@ -105,7 +114,15 @@ public partial class MainWindow : Window
                 BuildEnabledPlayerSources(settings));
         }
 
-        Width = Math.Clamp(settings.WindowWidth, 320, 1400);
+        if (settings.EnableFloatingWindowMode)
+        {
+            Width = Math.Clamp(settings.FloatingWindowWidth, 320, 1400);
+            Height = Math.Clamp(settings.FloatingWindowHeight, 48, 260);
+        }
+        else
+        {
+            Width = Math.Clamp(settings.WindowWidth, 320, 1400);
+        }
         try
         {
             var brush = (Media.Brush?)new Media.BrushConverter().ConvertFromString(settings.ForegroundColor);
@@ -137,6 +154,7 @@ public partial class MainWindow : Window
         _lyricSyncService = BuildLyricSyncService(settings);
         _enablePureMusicSpectrum = settings.EnablePureMusicSpectrum;
         _enableFloatingWindowMode = settings.EnableFloatingWindowMode;
+        UpdateFloatingWindowChrome();
         PositionLyricsWindow();
         AttachToTaskbarHost();
         PushStyleToWebView(settings);
@@ -730,6 +748,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        var useCoverColorBackground = settings.EnableFloatingWindowMode && settings.UseCoverColorBackground;
+        var backgroundOpacity = Math.Clamp(settings.BackgroundOpacity, 0, 1);
         var stylePayload = new
         {
             fontFamily = string.IsNullOrWhiteSpace(settings.FontFamily)
@@ -739,9 +759,11 @@ public partial class MainWindow : Window
             fontWeight = settings.FontWeight,
             primaryColor = ToCssColor(_primaryTextColor),
             secondaryColor = ToCssColor(_secondaryTextColor),
-            surfaceColor = settings.ShowBackground
-                ? $"rgba(18, 18, 24, {Math.Clamp(settings.BackgroundOpacity, 0, 1).ToString("0.####", CultureInfo.InvariantCulture)})"
+            surfaceColor = settings.ShowBackground || useCoverColorBackground
+                ? $"rgba(18, 18, 24, {backgroundOpacity.ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",
+            backgroundOpacity,
+            useCoverColorBackground,
             surfaceShadow = settings.ShowBorder
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
                 : "none",
@@ -989,22 +1011,105 @@ public partial class MainWindow : Window
 
     private void PositionFloatingWindow()
     {
+        if (_isAdjustingFloatingBounds)
+        {
+            return;
+        }
+
         var workArea = SystemParameters.WorkArea;
         var screenWidth = SystemParameters.PrimaryScreenWidth;
         var screenHeight = SystemParameters.PrimaryScreenHeight;
         var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
 
-        Height = 72;
-        Left = settings.HorizontalAnchor switch
+        Width = Math.Clamp(Width > 0 ? Width : settings.FloatingWindowWidth, 320, 1400);
+        Height = Math.Clamp(Height > 0 ? Height : settings.FloatingWindowHeight, 48, 260);
+
+        var defaultLeft = settings.HorizontalAnchor switch
         {
             LyricsHorizontalAnchor.Left => workArea.Left + 24 + settings.XOffset,
             LyricsHorizontalAnchor.Center => ((screenWidth - Width) / 2.0) + settings.XOffset,
             _ => workArea.Right - Width - 24 + settings.XOffset
         };
 
-        Top = Math.Max(workArea.Top + 24, screenHeight - 220 + settings.YOffset);
-        Left = Math.Clamp(Left, workArea.Left, Math.Max(workArea.Left, workArea.Right - Width));
-        Top = Math.Clamp(Top, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - Height));
+        var defaultTop = Math.Max(workArea.Top + 24, screenHeight - 220 + settings.YOffset);
+        var requestedLeft = IsUsableCoordinate(settings.FloatingWindowLeft) ? settings.FloatingWindowLeft!.Value : defaultLeft;
+        var requestedTop = IsUsableCoordinate(settings.FloatingWindowTop) ? settings.FloatingWindowTop!.Value : defaultTop;
+
+        Left = Math.Clamp(requestedLeft, workArea.Left, Math.Max(workArea.Left, workArea.Right - Width));
+        Top = Math.Clamp(requestedTop, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - Height));
+    }
+
+    private void UpdateFloatingWindowChrome()
+    {
+        var visibility = _enableFloatingWindowMode ? Visibility.Visible : Visibility.Collapsed;
+        FloatingDragHandle.Visibility = visibility;
+        FloatingResizeThumb.Visibility = visibility;
+        ResizeMode = _enableFloatingWindowMode ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
+    }
+
+    private void FloatingDragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_enableFloatingWindowMode || e.ButtonState != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        try
+        {
+            _isAdjustingFloatingBounds = true;
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        finally
+        {
+            _isAdjustingFloatingBounds = false;
+            PersistFloatingBounds();
+        }
+    }
+
+    private void FloatingResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        _isAdjustingFloatingBounds = true;
+    }
+
+    private void FloatingResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (!_enableFloatingWindowMode)
+        {
+            return;
+        }
+
+        Width = Math.Clamp(Width + e.HorizontalChange, 320, 1400);
+        Height = Math.Clamp(Height + e.VerticalChange, 48, 260);
+    }
+
+    private void FloatingResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _isAdjustingFloatingBounds = false;
+        PersistFloatingBounds();
+    }
+
+    private void PersistFloatingBounds()
+    {
+        if (!_enableFloatingWindowMode || System.Windows.Application.Current is not App app)
+        {
+            return;
+        }
+
+        var settings = app.Settings.Clone();
+        settings.EnableFloatingWindowMode = true;
+        settings.FloatingWindowLeft = Left;
+        settings.FloatingWindowTop = Top;
+        settings.FloatingWindowWidth = Math.Clamp(Width, 320, 1400);
+        settings.FloatingWindowHeight = Math.Clamp(Height, 48, 260);
+        app.SaveSettings(settings);
+    }
+
+    private static bool IsUsableCoordinate(double? value)
+    {
+        return value is double number && !double.IsNaN(number) && !double.IsInfinity(number);
     }
 
     private void AttachToTaskbarHost()
