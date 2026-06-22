@@ -26,12 +26,15 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private readonly AppSettings _settings;
     private bool _isWebReady;
+    private bool _useLightTheme;
 
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         _settings = settings;
+        _useLightTheme = settings.UseLightSettingsWindow;
+        ApplySettingsWindowTheme();
 
         SourceInitialized += SettingsWindow_SourceInitialized;
         Loaded += SettingsWindow_Loaded;
@@ -190,6 +193,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowLyricsOnStartup = _settings.ShowLyricsOnStartup,
             ShowLyricTranslation = _settings.ShowLyricTranslation,
             EnablePureMusicSpectrum = _settings.EnablePureMusicSpectrum,
+            UseLightSettingsWindow = _settings.UseLightSettingsWindow,
             FontSize = _settings.FontSize,
             FontFamily = ResolveInstalledFontFamily(_settings.FontFamily) ?? ResolveInstalledFontFamily(AppSettings.DefaultFontFamily) ?? "Microsoft YaHei UI",
             FontWeight = NormalizeFontWeight(_settings.FontWeight),
@@ -199,6 +203,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             BackgroundOpacity = _settings.BackgroundOpacity,
             ShowBorder = _settings.ShowBorder,
             ShowTextShadow = _settings.ShowTextShadow,
+            EnableFloatingWindowMode = _settings.EnableFloatingWindowMode,
             WindowWidth = _settings.WindowWidth,
             HorizontalAnchor = _settings.HorizontalAnchor,
             XOffset = _settings.XOffset,
@@ -351,6 +356,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             case "enablePureMusicSpectrum":
                 _settings.EnablePureMusicSpectrum = ReadBool(element, _settings.EnablePureMusicSpectrum);
                 break;
+            case "useLightSettingsWindow":
+                _settings.UseLightSettingsWindow = ReadBool(element, _settings.UseLightSettingsWindow);
+                _useLightTheme = _settings.UseLightSettingsWindow;
+                ApplySettingsWindowTheme();
+                break;
             case "showBackground":
                 _settings.ShowBackground = ReadBool(element, _settings.ShowBackground);
                 break;
@@ -359,6 +369,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "showTextShadow":
                 _settings.ShowTextShadow = ReadBool(element, _settings.ShowTextShadow);
+                break;
+            case "enableFloatingWindowMode":
+                _settings.EnableFloatingWindowMode = ReadBool(element, _settings.EnableFloatingWindowMode);
                 break;
             case "enableSmtcTimelineMonitor":
                 _settings.EnableSmtcTimelineMonitor = ReadBool(element, _settings.EnableSmtcTimelineMonitor);
@@ -554,6 +567,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowLyricsOnStartup = source.ShowLyricsOnStartup;
         target.ShowLyricTranslation = source.ShowLyricTranslation;
         target.EnablePureMusicSpectrum = source.EnablePureMusicSpectrum;
+        target.UseLightSettingsWindow = source.UseLightSettingsWindow;
         target.FontSize = source.FontSize;
         target.FontFamily = source.FontFamily;
         target.FontWeight = source.FontWeight;
@@ -563,6 +577,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.BackgroundOpacity = source.BackgroundOpacity;
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;
+        target.EnableFloatingWindowMode = source.EnableFloatingWindowMode;
         target.WindowWidth = source.WindowWidth;
         target.HorizontalAnchor = source.HorizontalAnchor;
         target.XOffset = source.XOffset;
@@ -671,14 +686,46 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         if (HwndSource.FromHwnd(hwnd) is { CompositionTarget: { } compositionTarget })
         {
-            compositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(7, 14, 29);
+            compositionTarget.BackgroundColor = _useLightTheme
+                ? System.Windows.Media.Color.FromRgb(247, 249, 252)
+                : System.Windows.Media.Color.FromRgb(7, 14, 29);
         }
 
-        var darkMode = 1;
+        var darkMode = _useLightTheme ? 0 : 1;
         _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeUseImmersiveDarkMode, ref darkMode, Marshal.SizeOf<int>());
 
         var cornerPreference = DwmWindowCornerPreferenceRound;
         _ = DwmSetWindowAttribute(hwnd, DwmWindowAttributeWindowCornerPreference, ref cornerPreference, Marshal.SizeOf<int>());
+    }
+
+    private void ApplySettingsWindowTheme()
+    {
+        var background = _useLightTheme
+            ? System.Windows.Media.Color.FromRgb(247, 249, 252)
+            : System.Windows.Media.Color.FromRgb(7, 14, 29);
+        var foreground = _useLightTheme
+            ? System.Windows.Media.Color.FromRgb(15, 23, 42)
+            : System.Windows.Media.Color.FromRgb(248, 250, 252);
+        var title = _useLightTheme
+            ? System.Windows.Media.Color.FromArgb(150, 15, 23, 42)
+            : System.Windows.Media.Color.FromArgb(122, 255, 255, 255);
+
+        Background = new SolidColorBrush(background);
+        Foreground = new SolidColorBrush(foreground);
+        RootGrid.Background = new SolidColorBrush(background);
+        CaptionBar.Background = new SolidColorBrush(background);
+        CaptionTitle.Foreground = new SolidColorBrush(title);
+        MinimizeIcon.Foreground = new SolidColorBrush(foreground);
+        MaximizeRestoreIcon.Foreground = new SolidColorBrush(foreground);
+        CloseIcon.Foreground = new SolidColorBrush(foreground);
+        SettingsWebView.DefaultBackgroundColor = System.Drawing.Color.FromArgb(background.A, background.R, background.G, background.B);
+
+        foreach (var button in CaptionButtons.Children.OfType<System.Windows.Controls.Button>())
+        {
+            button.Foreground = new SolidColorBrush(foreground);
+        }
+
+        ApplyWindowChromeAttributes();
     }
 
     private const int DwmWindowAttributeUseImmersiveDarkMode = 20;
@@ -746,6 +793,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowLyricsOnStartup { get; set; }
         public bool ShowLyricTranslation { get; set; }
         public bool EnablePureMusicSpectrum { get; set; }
+        public bool UseLightSettingsWindow { get; set; }
         public double FontSize { get; set; }
         public string FontFamily { get; set; } = "";
         public string FontWeight { get; set; } = "";
@@ -755,6 +803,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public double BackgroundOpacity { get; set; }
         public bool ShowBorder { get; set; }
         public bool ShowTextShadow { get; set; }
+        public bool EnableFloatingWindowMode { get; set; }
         public double WindowWidth { get; set; }
         public LyricsHorizontalAnchor HorizontalAnchor { get; set; }
         public double XOffset { get; set; }

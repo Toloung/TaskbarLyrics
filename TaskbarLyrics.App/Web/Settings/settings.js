@@ -30,6 +30,7 @@ const bridge = {
 function updateSetting(key, value) {
   if (!state) return;
   state[key] = value;
+  if (key === "useLightSettingsWindow") applyTheme(value);
   if (key === "foregroundColorMode") updateForegroundMode(value);
   if (key === "foregroundColor") {
     state.foregroundColorMode = "Custom";
@@ -56,6 +57,11 @@ function setState(nextState, fontList = fonts) {
   renderFonts();
   renderControls();
   renderOrder();
+  applyTheme(Boolean(state.useLightSettingsWindow));
+}
+
+function applyTheme(useLightTheme) {
+  document.body.classList.toggle("light", Boolean(useLightTheme));
 }
 
 function renderFonts() {

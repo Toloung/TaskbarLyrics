@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
     private bool _enableSmtcTimelineMonitor;
     private bool _enablePureMusicSpectrum = true;
+    private bool _enableFloatingWindowMode;
     private SmtcTimelineMonitorWindow? _smtcTimelineMonitorWindow;
     private bool _isWebViewReady;
     private bool _isWebViewInitializing;
@@ -81,7 +82,7 @@ public partial class MainWindow : Window
 
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
-        SizeChanged += (_, _) => AnchorToTaskbar();
+        SizeChanged += (_, _) => PositionLyricsWindow();
         IsVisibleChanged += OnIsVisibleChanged;
         Closing += OnClosing;
         Closed += OnClosed;
@@ -135,7 +136,8 @@ public partial class MainWindow : Window
         _lyricSyncService.Dispose();
         _lyricSyncService = BuildLyricSyncService(settings);
         _enablePureMusicSpectrum = settings.EnablePureMusicSpectrum;
-        AnchorToTaskbar();
+        _enableFloatingWindowMode = settings.EnableFloatingWindowMode;
+        PositionLyricsWindow();
         AttachToTaskbarHost();
         PushStyleToWebView(settings);
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
@@ -184,7 +186,7 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        AnchorToTaskbar();
+        PositionLyricsWindow();
         AttachToTaskbarHost();
         await EnsureLyricsWebViewReadyAsync();
         _audioSpectrumService.Start();
@@ -216,7 +218,7 @@ public partial class MainWindow : Window
                 _spectrumTimer.Start();
             }
 
-            AnchorToTaskbar();
+            PositionLyricsWindow();
             AttachToTaskbarHost();
         }
         else
@@ -317,7 +319,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            AnchorToTaskbar();
+            PositionLyricsWindow();
             AttachToTaskbarHost();
         });
     }
@@ -953,6 +955,17 @@ public partial class MainWindow : Window
 """;
     }
 
+    private void PositionLyricsWindow()
+    {
+        if (_enableFloatingWindowMode)
+        {
+            PositionFloatingWindow();
+            return;
+        }
+
+        AnchorToTaskbar();
+    }
+
     private void AnchorToTaskbar()
     {
         var workArea = SystemParameters.WorkArea;
@@ -972,6 +985,26 @@ public partial class MainWindow : Window
         };
 
         Top = screenHeight - taskbarHeight + ((taskbarHeight - Height) / 2.0) + settings.YOffset;
+    }
+
+    private void PositionFloatingWindow()
+    {
+        var workArea = SystemParameters.WorkArea;
+        var screenWidth = SystemParameters.PrimaryScreenWidth;
+        var screenHeight = SystemParameters.PrimaryScreenHeight;
+        var settings = (System.Windows.Application.Current as App)?.Settings ?? new AppSettings();
+
+        Height = 72;
+        Left = settings.HorizontalAnchor switch
+        {
+            LyricsHorizontalAnchor.Left => workArea.Left + 24 + settings.XOffset,
+            LyricsHorizontalAnchor.Center => ((screenWidth - Width) / 2.0) + settings.XOffset,
+            _ => workArea.Right - Width - 24 + settings.XOffset
+        };
+
+        Top = Math.Max(workArea.Top + 24, screenHeight - 220 + settings.YOffset);
+        Left = Math.Clamp(Left, workArea.Left, Math.Max(workArea.Left, workArea.Right - Width));
+        Top = Math.Clamp(Top, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - Height));
     }
 
     private void AttachToTaskbarHost()
@@ -1002,7 +1035,7 @@ public partial class MainWindow : Window
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                AnchorToTaskbar();
+                PositionLyricsWindow();
                 AttachToTaskbarHost();
             }));
         }
@@ -1011,7 +1044,7 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 EnsureVisibleIfExpected();
-                AnchorToTaskbar();
+                PositionLyricsWindow();
                 AttachToTaskbarHost();
             }));
         }
@@ -1036,7 +1069,7 @@ public partial class MainWindow : Window
             Show();
         }
 
-        AnchorToTaskbar();
+        PositionLyricsWindow();
         AttachToTaskbarHost();
     }
 

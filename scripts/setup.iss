@@ -40,7 +40,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescription: "快捷方式："; Flags: checkedonce
@@ -65,6 +65,30 @@ const
   WebView2RegKeyWow = 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00FB3A68797D}';
   WebView2Url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
 
+function IsUpgradeInstall: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\{#MyAppExeName}'));
+end;
+
+function IsTaskbarLyricsRunning: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{cmd}'),
+    '/C tasklist /FI "IMAGENAME eq {#MyAppExeName}" /NH | find /I "{#MyAppExeName}" >NUL',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function CloseTaskbarLyrics: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{cmd}'),
+    '/C taskkill /IM "{#MyAppExeName}" /T /F',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and
+    ((ResultCode = 0) or (ResultCode = 128));
+end;
+
 function IsWebView2Installed: Boolean;
 var
   Version: string;
@@ -84,6 +108,27 @@ var
   InstallerPath: string;
 begin
   Result := '';
+
+  if IsUpgradeInstall then
+  begin
+    MsgBox('检测到已安装的 TaskbarLyrics。' + #13#10 +
+           '安装程序将升级现有版本，并保留你的设置、歌词缓存和数据库。',
+           mbInformation, MB_OK);
+  end;
+
+  if IsTaskbarLyricsRunning then
+  begin
+    MsgBox('检测到 TaskbarLyrics 正在运行。' + #13#10 +
+           '安装程序将先关闭 TaskbarLyrics.exe，然后继续安装。',
+           mbInformation, MB_OK);
+
+    if not CloseTaskbarLyrics then
+    begin
+      Result := '无法自动关闭 TaskbarLyrics.exe。请手动退出程序后重新运行安装程序。';
+      Exit;
+    end;
+  end;
+
   if IsWebView2Installed then
     Exit;
 

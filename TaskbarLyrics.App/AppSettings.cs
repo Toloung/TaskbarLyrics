@@ -48,6 +48,8 @@ public sealed class AppSettings
 
     public bool EnablePureMusicSpectrum { get; set; } = true;
 
+    public bool UseLightSettingsWindow { get; set; } = false;
+
     public double FontSize { get; set; } = 14;
 
     public string FontFamily { get; set; } = DefaultFontFamily;
@@ -65,6 +67,8 @@ public sealed class AppSettings
     public bool ShowBorder { get; set; } = false;
 
     public bool ShowTextShadow { get; set; } = false;
+
+    public bool EnableFloatingWindowMode { get; set; } = false;
 
     public double WindowWidth { get; set; } = 420;
 

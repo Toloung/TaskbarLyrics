@@ -76,7 +76,8 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid Background="#070E1D">
+    <Grid x:Name="RootGrid"
+          Background="#070E1D">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />
@@ -88,18 +89,21 @@
             <ColumnDefinition Width="8" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="0"
+        <Border x:Name="CaptionBar"
+                Grid.Row="0"
                 Grid.ColumnSpan="3"
                 Background="#070E1D"
                 MouseLeftButtonDown="CaptionDragArea_MouseLeftButtonDown">
-            <TextBlock Text="TaskbarLyrics - 设置"
+            <TextBlock x:Name="CaptionTitle"
+                       Text="TaskbarLyrics - 设置"
                        Margin="16,0,0,0"
                        FontSize="12"
                        Foreground="#7AFFFFFF"
                        VerticalAlignment="Center" />
         </Border>
 
-        <StackPanel Grid.Row="0"
+        <StackPanel x:Name="CaptionButtons"
+                    Grid.Row="0"
                     Grid.ColumnSpan="3"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
@@ -107,7 +111,7 @@
             <Button Style="{StaticResource CaptionButtonStyle}"
                     WindowChrome.IsHitTestVisibleInChrome="True"
                     Click="MinimizeButton_Click">
-                <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
+                <TextBlock x:Name="MinimizeIcon" Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
             </Button>
             <Button Style="{StaticResource CaptionButtonStyle}"
                     WindowChrome.IsHitTestVisibleInChrome="True"
@@ -118,7 +122,7 @@
                     WindowChrome.IsHitTestVisibleInChrome="True"
                     Tag="Close"
                     Click="CloseButton_Click">
-                <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
+                <TextBlock x:Name="CloseIcon" Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
             </Button>
         </StackPanel>
 

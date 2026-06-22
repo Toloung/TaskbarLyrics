@@ -52,6 +52,7 @@
             <label class="row"><span><strong>启动时显示歌词</strong><small>应用启动后自动显示歌词悬浮窗口。</small></span><input data-key="showLyricsOnStartup" type="checkbox"></label>
             <label class="row"><span><strong>显示歌词翻译</strong><small>统一控制各歌词源的翻译显示。</small></span><input data-key="showLyricTranslation" type="checkbox"></label>
             <label class="row"><span><strong>纯音乐时显示频谱</strong><small>歌曲识别为纯音乐时，在歌词区域显示实时频谱。</small></span><input data-key="enablePureMusicSpectrum" type="checkbox"></label>
+            <label class="row"><span><strong>设置界面浅色模式</strong><small>将设置窗口切换为浅色界面，适合亮色桌面环境。</small></span><input data-key="useLightSettingsWindow" type="checkbox"></label>
             <label class="row"><span><strong>显示背景</strong><small>为歌词窗口启用半透明背景。</small></span><input data-key="showBackground" type="checkbox"></label>
             <label class="row"><span><strong>显示边框</strong><small>为歌词窗口绘制边框，便于深浅背景上分辨。</small></span><input data-key="showBorder" type="checkbox"></label>
           </div>
@@ -73,6 +74,7 @@
           <h2>窗口设置</h2>
           <p class="section-desc">调整任务栏歌词窗口的位置、宽度与透明度。</p>
           <div class="rows">
+            <label class="row"><span><strong>悬浮窗模式</strong><small>歌词窗口脱离任务栏区域，作为桌面置顶悬浮窗显示。</small></span><input data-key="enableFloatingWindowMode" type="checkbox"></label>
             <label class="form-row"><span><strong>背景不透明度</strong><small>范围 0 到 1，数值越大背景越不透明。</small></span><div class="stepper" data-key="backgroundOpacity" data-min="0" data-max="1" data-step="0.05" data-decimals="2"><button data-step="-1">-</button><input data-key="backgroundOpacity" inputmode="decimal"><button data-step="1">+</button></div></label>
             <label class="form-row"><strong>窗口宽度 (px)</strong><div class="stepper" data-key="windowWidth" data-min="320" data-max="1400" data-step="10" data-decimals="0"><button data-step="-1">-</button><input data-key="windowWidth" inputmode="decimal"><button data-step="1">+</button></div></label>
             <label class="form-row"><strong>水平锚点</strong><select data-key="horizontalAnchor"><option value="Left">左侧</option><option value="Center">居中</option><option value="Right">右侧</option></select></label>
