@@ -14,7 +14,8 @@
         <strong>TaskbarLyrics</strong>
       </div>
       <nav class="nav">
-        <button class="nav-item active" data-target="players"><span>▷</span><b>播放器</b></button>
+        <button class="nav-item active" data-target="floating"><span>▣</span><b>悬浮窗</b></button>
+        <button class="nav-item" data-target="players"><span>▷</span><b>播放器</b></button>
         <button class="nav-item" data-target="lyrics"><span>Aa</span><b>歌词</b></button>
         <button class="nav-item" data-target="appearance"><span>◌</span><b>外观</b></button>
         <button class="nav-item" data-target="layout"><span>▦</span><b>布局</b></button>
@@ -33,6 +34,16 @@
       </header>
 
       <div id="content" class="content">
+        <section id="floating" class="card reveal">
+          <h2>悬浮窗模式</h2>
+          <p class="section-desc">悬浮窗位置和大小独立保存，不受任务栏布局、水平锚点、X/Y 偏移影响；窗口内任意位置都可拖动。</p>
+          <div class="rows">
+            <label class="row"><span><strong>启用悬浮窗</strong><small>歌词窗口脱离任务栏区域，作为桌面置顶悬浮窗显示。</small></span><input data-key="enableFloatingWindowMode" type="checkbox"></label>
+            <label class="row"><span><strong>歌词颜色取色</strong><small>悬浮窗模式下使用歌曲封面主色作为歌词文字颜色。</small></span><input data-key="useCoverColorBackground" type="checkbox"></label>
+            <div class="form-row corner-row"><span><strong>快速放置</strong><small>把悬浮窗快速移动到桌面四个角。</small></span><div class="corner-grid"><button type="button" data-floating-corner="topLeft">左上</button><button type="button" data-floating-corner="topRight">右上</button><button type="button" data-floating-corner="bottomLeft">左下</button><button type="button" data-floating-corner="bottomRight">右下</button></div></div>
+          </div>
+        </section>
+
         <section id="players" class="card reveal">
           <h2>播放器集成</h2>
           <p class="section-desc">选择要监听的音乐播放器，并通过拖拽调整优先识别顺序。</p>
@@ -75,8 +86,6 @@
           <h2>窗口设置</h2>
           <p class="section-desc">调整任务栏歌词窗口的位置、宽度与透明度。</p>
           <div class="rows">
-            <label class="row"><span><strong>悬浮窗模式</strong><small>歌词窗口脱离任务栏区域，作为桌面置顶悬浮窗显示。</small></span><input data-key="enableFloatingWindowMode" type="checkbox"></label>
-            <label class="row"><span><strong>悬浮窗背景取色</strong><small>悬浮窗模式下使用歌曲封面主色作为歌词背景。</small></span><input data-key="useCoverColorBackground" type="checkbox"></label>
             <label class="form-row"><span><strong>背景不透明度</strong><small>范围 0 到 1，数值越大背景越不透明。</small></span><div class="stepper" data-key="backgroundOpacity" data-min="0" data-max="1" data-step="0.05" data-decimals="2"><button data-step="-1">-</button><input data-key="backgroundOpacity" inputmode="decimal"><button data-step="1">+</button></div></label>
             <label class="form-row"><strong>窗口宽度 (px)</strong><div class="stepper" data-key="windowWidth" data-min="320" data-max="1400" data-step="10" data-decimals="0"><button data-step="-1">-</button><input data-key="windowWidth" inputmode="decimal"><button data-step="1">+</button></div></label>
             <label class="form-row"><strong>水平锚点</strong><select data-key="horizontalAnchor"><option value="Left">左侧</option><option value="Center">居中</option><option value="Right">右侧</option></select></label>

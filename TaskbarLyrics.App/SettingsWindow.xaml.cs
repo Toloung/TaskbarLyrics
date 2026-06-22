@@ -140,6 +140,11 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 ApplySourceOrder(message.Value);
                 SaveSettings();
                 break;
+            case "placeFloatingWindow":
+                ApplyFloatingWindowPlacement(message.Value);
+                SaveSettings();
+                await PushSettingsToWebAsync();
+                break;
             case "resetDefaults":
                 var defaultSettings = new AppSettings();
                 App.ApplyStartupForegroundColor(defaultSettings);
@@ -435,6 +440,35 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             .Select(x => x.GetString())
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x!));
+    }
+
+    private void ApplyFloatingWindowPlacement(JsonElement? value)
+    {
+        var corner = value?.ValueKind == JsonValueKind.String
+            ? value.Value.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(corner))
+        {
+            return;
+        }
+
+        var workArea = SystemParameters.WorkArea;
+        var width = Math.Clamp(_settings.FloatingWindowWidth > 0 ? _settings.FloatingWindowWidth : 560, 320, 1400);
+        var height = Math.Clamp(_settings.FloatingWindowHeight > 0 ? _settings.FloatingWindowHeight : 72, 48, 260);
+
+        _settings.EnableFloatingWindowMode = true;
+        _settings.FloatingWindowWidth = width;
+        _settings.FloatingWindowHeight = height;
+        _settings.FloatingWindowLeft = corner switch
+        {
+            "topRight" or "bottomRight" => Math.Max(workArea.Left, workArea.Right - width),
+            _ => workArea.Left
+        };
+        _settings.FloatingWindowTop = corner switch
+        {
+            "bottomLeft" or "bottomRight" => Math.Max(workArea.Top, workArea.Bottom - height),
+            _ => workArea.Top
+        };
     }
 
     private async Task PickForegroundColorAsync()

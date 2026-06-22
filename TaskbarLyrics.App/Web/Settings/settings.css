@@ -510,6 +510,40 @@ body.light .form-row:hover {
   padding: 8px 14px;
 }
 
+.corner-row {
+  align-items: start;
+}
+
+.corner-grid {
+  width: 280px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.corner-grid button {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(120, 160, 255, .18);
+  background: var(--input);
+  color: var(--text);
+  font-weight: 620;
+  transition:
+    background .14s ease,
+    border-color .14s ease,
+    transform .16s cubic-bezier(.2, .8, .2, 1);
+}
+
+.corner-grid button:hover {
+  border-color: rgba(120, 160, 255, .34);
+  background: rgba(77, 122, 255, .12);
+  transform: translateY(-1px);
+}
+
+.corner-grid button:active {
+  transform: translateY(0) scale(.985);
+}
+
 strong {
   font-size: 14px;
   font-weight: 640;

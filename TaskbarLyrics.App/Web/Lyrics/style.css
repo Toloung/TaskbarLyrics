@@ -25,6 +25,10 @@
   --line-pitch: 15px;
   --current-size: 13px;
   --next-size: 12px;
+  --cover-size: 34px;
+  --cover-gap: 8px;
+  --cover-radius: 6px;
+  --cover-fallback-size: 13px;
   --primary-offset-y: 1px;
   --secondary-offset-y: 2px;
   --surface-color: transparent;
@@ -66,14 +70,14 @@ html, body {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 34px 8px minmax(0, 1fr);
+  grid-template-columns: var(--cover-size) var(--cover-gap) minmax(0, 1fr);
   align-items: center;
 }
 
 .cover {
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
+  width: var(--cover-size);
+  height: var(--cover-size);
+  border-radius: var(--cover-radius);
   overflow: hidden;
   position: relative;
   background: #1f2937;
@@ -97,7 +101,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--cover-fallback-size);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.96);
   user-select: none;

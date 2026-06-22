@@ -49,11 +49,14 @@ let activeCoverImageEl = coverImageEl;
 let standbyCoverImageEl = coverImageNextEl;
 let currentCoverUri = "";
 let coverGeneration = 0;
-let coverSurfaceColor = "";
+let coverLyricPrimaryColor = "";
+let coverLyricSecondaryColor = "";
 const styleState = {
+  primaryColor: "rgba(255, 255, 255, 1)",
+  secondaryColor: "rgba(255, 255, 255, 0.68)",
   surfaceColor: "transparent",
   backgroundOpacity: 0.55,
-  useCoverColorBackground: false
+  useCoverLyricColor: false
 };
 let isSpectrumMode = false;
 let hasAudioDrivenSpectrum = false;
@@ -384,12 +387,25 @@ function applyFallbackCover(text, fallbackColor) {
 }
 
 function applySurfaceColor() {
-  const nextColor = styleState.useCoverColorBackground && coverSurfaceColor
-    ? coverSurfaceColor
-    : styleState.surfaceColor;
+  if (styleState.surfaceColor && CSS.supports("background-color", styleState.surfaceColor)) {
+    root.style.setProperty("--surface-color", styleState.surfaceColor);
+  }
+}
 
-  if (nextColor && CSS.supports("background-color", nextColor)) {
-    root.style.setProperty("--surface-color", nextColor);
+function applyLyricColors() {
+  const primary = styleState.useCoverLyricColor && coverLyricPrimaryColor
+    ? coverLyricPrimaryColor
+    : styleState.primaryColor;
+  const secondary = styleState.useCoverLyricColor && coverLyricSecondaryColor
+    ? coverLyricSecondaryColor
+    : styleState.secondaryColor;
+
+  if (primary && CSS.supports("color", primary)) {
+    root.style.setProperty("--primary", primary);
+  }
+
+  if (secondary && CSS.supports("color", secondary)) {
+    root.style.setProperty("--secondary", secondary);
   }
 }
 
@@ -398,7 +414,7 @@ function normalizeSurfaceChannel(value, min, max) {
 }
 
 function setCoverSurfaceFromImage(image, generation) {
-  if (!styleState.useCoverColorBackground || !image) {
+  if (!styleState.useCoverLyricColor || !image) {
     return;
   }
 
@@ -439,24 +455,27 @@ function setCoverSurfaceFromImage(image, generation) {
     green /= total;
     blue /= total;
     const luminance = (red * 0.2126) + (green * 0.7152) + (blue * 0.0722);
-    const lift = luminance < 56 ? 1.45 : 1;
-    const soften = luminance > 214 ? 0.72 : 1;
-    red = normalizeSurfaceChannel(red * lift * soften, 24, 226);
-    green = normalizeSurfaceChannel(green * lift * soften, 24, 226);
-    blue = normalizeSurfaceChannel(blue * lift * soften, 24, 226);
+    const lift = luminance < 68 ? 1.72 : 1;
+    const soften = luminance > 218 ? 0.68 : 1;
+    red = normalizeSurfaceChannel(red * lift * soften, 20, 238);
+    green = normalizeSurfaceChannel(green * lift * soften, 20, 238);
+    blue = normalizeSurfaceChannel(blue * lift * soften, 20, 238);
 
-    coverSurfaceColor = `rgba(${red}, ${green}, ${blue}, ${clamp01(styleState.backgroundOpacity).toFixed(3)})`;
-    applySurfaceColor();
+    coverLyricPrimaryColor = `rgba(${red}, ${green}, ${blue}, 1)`;
+    coverLyricSecondaryColor = `rgba(${red}, ${green}, ${blue}, 0.72)`;
+    applyLyricColors();
   } catch {
-    coverSurfaceColor = "";
-    applySurfaceColor();
+    coverLyricPrimaryColor = "";
+    coverLyricSecondaryColor = "";
+    applyLyricColors();
   }
 }
 
 function refreshCoverSurfaceFromUri(uri) {
-  if (!styleState.useCoverColorBackground || !uri) {
-    coverSurfaceColor = "";
-    applySurfaceColor();
+  if (!styleState.useCoverLyricColor || !uri) {
+    coverLyricPrimaryColor = "";
+    coverLyricSecondaryColor = "";
+    applyLyricColors();
     return;
   }
 
@@ -465,8 +484,9 @@ function refreshCoverSurfaceFromUri(uri) {
   image.onload = () => setCoverSurfaceFromImage(image, generation);
   image.onerror = () => {
     if (generation === coverGeneration) {
-      coverSurfaceColor = "";
-      applySurfaceColor();
+      coverLyricPrimaryColor = "";
+      coverLyricSecondaryColor = "";
+      applyLyricColors();
     }
   };
   image.src = uri;
@@ -657,13 +677,23 @@ function updateMetrics() {
   // WPF host extends the WebView 2px downward for descender safety; exclude that buffer from row metrics.
   const viewportDescenderBufferPx = 2;
   const measuredViewportHeight = viewportEl.clientHeight || 30;
+  const measuredLayoutHeight = layoutEl.clientHeight || measuredViewportHeight;
+  const measuredLayoutWidth = layoutEl.clientWidth || 320;
   const hostHeight = Math.max(26, measuredViewportHeight - viewportDescenderBufferPx);
   rowHeightPx = Math.max(13, Math.floor(hostHeight / 2));
   rowGapPx = Math.max(0, hostHeight - (rowHeightPx * 2));
   linePitchPx = rowHeightPx + rowGapPx;
   const currentSizeMax = Math.max(11.2, rowHeightPx * 0.92);
-  currentSize = Math.min(requestedFontSize, currentSizeMax);
+  currentSize = Math.min(Math.max(requestedFontSize, rowHeightPx * 0.78), currentSizeMax);
   const nextSize = Math.max(9, currentSize * 0.92);
+  const coverSize = Math.max(28, Math.min(120, measuredLayoutHeight - 10, measuredLayoutWidth * 0.18));
+  const coverGap = Math.max(8, Math.min(18, coverSize * 0.24));
+  const coverRadius = Math.max(6, Math.min(18, coverSize * 0.18));
+  const coverFallbackSize = Math.max(13, coverSize * 0.38);
+  root.style.setProperty("--cover-size", `${coverSize.toFixed(2)}px`);
+  root.style.setProperty("--cover-gap", `${coverGap.toFixed(2)}px`);
+  root.style.setProperty("--cover-radius", `${coverRadius.toFixed(2)}px`);
+  root.style.setProperty("--cover-fallback-size", `${coverFallbackSize.toFixed(2)}px`);
   root.style.setProperty("--row-height", `${rowHeightPx}px`);
   root.style.setProperty("--row-gap", `${rowGapPx}px`);
   root.style.setProperty("--line-pitch", `${linePitchPx}px`);
@@ -895,8 +925,9 @@ window.taskbarLyrics = {
           return;
         }
 
-        coverSurfaceColor = "";
-        applySurfaceColor();
+        coverLyricPrimaryColor = "";
+        coverLyricSecondaryColor = "";
+        applyLyricColors();
         scheduleFallbackCoverUpdate(text, fallbackColor, () => {
           if (coverFallbackEl) {
             coverFallbackEl.style.display = "flex";
@@ -918,8 +949,9 @@ window.taskbarLyrics = {
       return;
     }
 
-    coverSurfaceColor = "";
-    applySurfaceColor();
+    coverLyricPrimaryColor = "";
+    coverLyricSecondaryColor = "";
+    applyLyricColors();
     scheduleFallbackCoverUpdate(text, fallbackColor, () => {
       if (coverFallbackEl) {
         coverFallbackEl.style.display = "flex";
@@ -943,21 +975,21 @@ window.taskbarLyrics = {
     updateMetrics();
     root.style.setProperty("--font-weight", normalizeWeight(payload.fontWeight));
 
-    if (payload.primaryColor && CSS.supports("color", payload.primaryColor)) {
-      root.style.setProperty("--primary", payload.primaryColor);
-    }
-
-    if (payload.secondaryColor && CSS.supports("color", payload.secondaryColor)) {
-      root.style.setProperty("--secondary", payload.secondaryColor);
-    }
+    styleState.primaryColor = payload.primaryColor && CSS.supports("color", payload.primaryColor)
+      ? payload.primaryColor
+      : "rgba(255, 255, 255, 1)";
+    styleState.secondaryColor = payload.secondaryColor && CSS.supports("color", payload.secondaryColor)
+      ? payload.secondaryColor
+      : "rgba(255, 255, 255, 0.68)";
 
     styleState.surfaceColor = payload.surfaceColor && CSS.supports("background-color", payload.surfaceColor)
       ? payload.surfaceColor
       : "transparent";
     styleState.backgroundOpacity = clamp01(payload.backgroundOpacity ?? styleState.backgroundOpacity);
-    styleState.useCoverColorBackground = Boolean(payload.useCoverColorBackground);
+    styleState.useCoverLyricColor = Boolean(payload.useCoverLyricColor);
     applySurfaceColor();
-    if (styleState.useCoverColorBackground && currentCoverUri) {
+    applyLyricColors();
+    if (styleState.useCoverLyricColor && currentCoverUri) {
       refreshCoverSurfaceFromUri(currentCoverUri);
     }
 

@@ -72,6 +72,11 @@ public partial class App : System.Windows.Application
         _lyricsWindowHost?.ApplySettings(Settings);
     }
 
+    public void UpdateTrayPlayerSource(string? sourceApp)
+    {
+        Dispatcher.BeginInvoke(() => _trayService?.SetPlayerSource(sourceApp));
+    }
+
     private static void ApplyStartWithWindows(bool enabled)
     {
         try

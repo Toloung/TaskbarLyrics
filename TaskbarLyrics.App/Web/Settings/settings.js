@@ -250,6 +250,22 @@ function setupEvents() {
     bridge.post({ type: "openSpectrumTuning" });
   });
 
+  document.querySelectorAll("[data-floating-corner]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const corner = button.dataset.floatingCorner;
+      if (!corner) return;
+      if (state) {
+        state.enableFloatingWindowMode = true;
+        renderControls();
+      }
+      button.animate(
+        [{ transform: "scale(1)" }, { transform: "scale(.96)" }, { transform: "scale(1)" }],
+        { duration: 150, easing: "ease-out" }
+      );
+      bridge.post({ type: "placeFloatingWindow", value: corner });
+    });
+  });
+
   document.getElementById("sidebarToggle")?.addEventListener("click", () => {
     const windowElement = document.querySelector(".window");
     const toggle = document.getElementById("sidebarToggle");

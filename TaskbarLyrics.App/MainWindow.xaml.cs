@@ -365,6 +365,11 @@ public partial class MainWindow : Window
             EnsureVisibleIfExpected();
 
             var snapshot = await _musicSessionProvider.GetCurrentAsync();
+            if (System.Windows.Application.Current is App app)
+            {
+                app.UpdateTrayPlayerSource(snapshot.Track?.SourceApp);
+            }
+
             UpdateCover(snapshot);
 
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
@@ -748,7 +753,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var useCoverColorBackground = settings.EnableFloatingWindowMode && settings.UseCoverColorBackground;
+        var useCoverLyricColor = settings.EnableFloatingWindowMode && settings.UseCoverColorBackground;
         var backgroundOpacity = Math.Clamp(settings.BackgroundOpacity, 0, 1);
         var stylePayload = new
         {
@@ -759,11 +764,11 @@ public partial class MainWindow : Window
             fontWeight = settings.FontWeight,
             primaryColor = ToCssColor(_primaryTextColor),
             secondaryColor = ToCssColor(_secondaryTextColor),
-            surfaceColor = settings.ShowBackground || useCoverColorBackground
+            surfaceColor = settings.ShowBackground
                 ? $"rgba(18, 18, 24, {backgroundOpacity.ToString("0.####", CultureInfo.InvariantCulture)})"
                 : "transparent",
             backgroundOpacity,
-            useCoverColorBackground,
+            useCoverLyricColor,
             surfaceShadow = settings.ShowBorder
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.16)"
                 : "none",
@@ -1024,14 +1029,8 @@ public partial class MainWindow : Window
         Width = Math.Clamp(Width > 0 ? Width : settings.FloatingWindowWidth, 320, 1400);
         Height = Math.Clamp(Height > 0 ? Height : settings.FloatingWindowHeight, 48, 260);
 
-        var defaultLeft = settings.HorizontalAnchor switch
-        {
-            LyricsHorizontalAnchor.Left => workArea.Left + 24 + settings.XOffset,
-            LyricsHorizontalAnchor.Center => ((screenWidth - Width) / 2.0) + settings.XOffset,
-            _ => workArea.Right - Width - 24 + settings.XOffset
-        };
-
-        var defaultTop = Math.Max(workArea.Top + 24, screenHeight - 220 + settings.YOffset);
+        var defaultLeft = workArea.Left + ((workArea.Width - Width) / 2.0);
+        var defaultTop = Math.Max(workArea.Top + 24, screenHeight - 220);
         var requestedLeft = IsUsableCoordinate(settings.FloatingWindowLeft) ? settings.FloatingWindowLeft!.Value : defaultLeft;
         var requestedTop = IsUsableCoordinate(settings.FloatingWindowTop) ? settings.FloatingWindowTop!.Value : defaultTop;
 
@@ -1045,33 +1044,60 @@ public partial class MainWindow : Window
         FloatingDragHandle.Visibility = visibility;
         FloatingResizeThumb.Visibility = visibility;
         ResizeMode = _enableFloatingWindowMode ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
+        MinWidth = _enableFloatingWindowMode ? 320 : 0;
+        MinHeight = _enableFloatingWindowMode ? 48 : 0;
+        MaxWidth = _enableFloatingWindowMode ? 1400 : double.PositiveInfinity;
+        MaxHeight = _enableFloatingWindowMode ? 260 : double.PositiveInfinity;
     }
 
     private void FloatingDragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_enableFloatingWindowMode || e.ButtonState != MouseButtonState.Pressed || FloatingResizeThumb.IsMouseOver)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        BeginNativeFloatingDrag();
+    }
+
+    private void FloatingResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        _isAdjustingFloatingBounds = true;
+    }
+
+    private void FloatingResizeThumb_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (!_enableFloatingWindowMode || e.ButtonState != MouseButtonState.Pressed)
         {
             return;
         }
 
-        try
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
-            _isAdjustingFloatingBounds = true;
-            DragMove();
+            return;
         }
-        catch (InvalidOperationException)
+
+        e.Handled = true;
+        BeginNativeFloatingDrag();
+    }
+
+    private void BeginNativeFloatingDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
         {
+            return;
         }
-        finally
+
+        _isAdjustingFloatingBounds = true;
+        _ = NativeMethods.ReleaseCapture();
+        _ = NativeMethods.SendMessage(hwnd, NativeMethods.WM_NCLBUTTONDOWN, NativeMethods.HTCAPTION, 0);
+        Dispatcher.BeginInvoke(new Action(() =>
         {
             _isAdjustingFloatingBounds = false;
             PersistFloatingBounds();
-        }
-    }
-
-    private void FloatingResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
-    {
-        _isAdjustingFloatingBounds = true;
+        }), DispatcherPriority.Background);
     }
 
     private void FloatingResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -1136,7 +1162,33 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if ((uint)msg == _taskbarCreatedMessage)
+        if (_enableFloatingWindowMode && msg == NativeMethods.WM_NCHITTEST)
+        {
+            var screenPoint = new System.Windows.Point(GetSignedLowWord(lParam), GetSignedHighWord(lParam));
+            var windowPoint = PointFromScreen(screenPoint);
+            var insideWindow = windowPoint.X >= 0 &&
+                windowPoint.Y >= 0 &&
+                windowPoint.X <= ActualWidth &&
+                windowPoint.Y <= ActualHeight;
+            var gripSize = Math.Max(64, Math.Min(96, Math.Min(ActualWidth, ActualHeight)));
+            var inFloatingGrip = windowPoint.X >= ActualWidth - gripSize &&
+                windowPoint.Y >= ActualHeight - gripSize &&
+                windowPoint.X <= ActualWidth &&
+                windowPoint.Y <= ActualHeight;
+
+            if (insideWindow)
+            {
+                handled = true;
+                return inFloatingGrip && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+                    ? new IntPtr(NativeMethods.HTBOTTOMRIGHT)
+                    : new IntPtr(NativeMethods.HTCAPTION);
+            }
+        }
+        else if (_enableFloatingWindowMode && msg == NativeMethods.WM_EXITSIZEMOVE)
+        {
+            Dispatcher.BeginInvoke(new Action(PersistFloatingBounds), DispatcherPriority.Background);
+        }
+        else if ((uint)msg == _taskbarCreatedMessage)
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -1149,12 +1201,21 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 EnsureVisibleIfExpected();
-                PositionLyricsWindow();
                 AttachToTaskbarHost();
             }));
         }
 
         return IntPtr.Zero;
+    }
+
+    private static int GetSignedLowWord(IntPtr value)
+    {
+        return unchecked((short)((long)value & 0xFFFF));
+    }
+
+    private static int GetSignedHighWord(IntPtr value)
+    {
+        return unchecked((short)(((long)value >> 16) & 0xFFFF));
     }
 
     private void EnsureVisibleIfExpected()
@@ -1174,7 +1235,11 @@ public partial class MainWindow : Window
             Show();
         }
 
-        PositionLyricsWindow();
+        if (!_enableFloatingWindowMode)
+        {
+            PositionLyricsWindow();
+        }
+
         AttachToTaskbarHost();
     }
 
@@ -1192,6 +1257,11 @@ internal static class NativeMethods
     internal const uint SWP_NOOWNERZORDER = 0x0200;
     internal const uint SWP_SHOWWINDOW = 0x0040;
     internal const int SW_SHOWNOACTIVATE = 4;
+    internal const int WM_NCHITTEST = 0x0084;
+    internal const int WM_NCLBUTTONDOWN = 0x00A1;
+    internal const int WM_EXITSIZEMOVE = 0x0232;
+    internal const int HTCAPTION = 2;
+    internal const int HTBOTTOMRIGHT = 17;
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool SetWindowPos(
@@ -1208,4 +1278,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", PreserveSig = true)]
+    internal static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", PreserveSig = true)]
+    internal static extern IntPtr SendMessage(IntPtr hWnd, int message, int wParam, int lParam);
 }
