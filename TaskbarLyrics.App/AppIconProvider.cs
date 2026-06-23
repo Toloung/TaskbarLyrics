@@ -86,7 +86,7 @@ internal static class AppIconProvider
             return Color.FromArgb(52, 152, 219);
         }
 
-        return Color.FromArgb(77, 122, 255);
+        return Color.FromArgb(108, 165, 254);
     }
 
     [DllImport("user32.dll", SetLastError = true)]

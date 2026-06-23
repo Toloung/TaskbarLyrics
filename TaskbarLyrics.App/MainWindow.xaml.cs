@@ -33,7 +33,7 @@ public partial class MainWindow : Window
     private Media.Color _primaryTextColor = Media.Colors.White;
     private Media.Color _secondaryTextColor = Media.Color.FromArgb(190, 255, 255, 255);
     private LyricSyncService _lyricSyncService;
-    private string _currentLine = "TaskbarLyrics 已启动";
+    private string _currentLine = "LyricsBar 已启动";
     private string _nextLine = "等待歌词...";
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
@@ -534,7 +534,7 @@ public partial class MainWindow : Window
             var webViewControl = EnsureWebViewControlCreated();
             var webViewUserDataFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "TaskbarLyrics",
+                "LyricsBar",
                 "WebView2");
             Directory.CreateDirectory(webViewUserDataFolder);
             var webViewEnvironment = await CoreWebView2Environment.CreateAsync(

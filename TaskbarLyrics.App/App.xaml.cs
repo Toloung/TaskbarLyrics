@@ -7,7 +7,8 @@ namespace TaskbarLyrics.App;
 public partial class App : System.Windows.Application
 {
     private const string StartupRunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string StartupRunValueName = "TaskbarLyrics";
+    private const string StartupRunValueName = "LyricsBar";
+    private const string LegacyStartupRunValueName = "TaskbarLyrics";
 
     private SettingsStore? _settingsStore;
     private TrayService? _trayService;
@@ -24,7 +25,7 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        Wpf.Ui.Appearance.ApplicationAccentColorManager.ApplySystemAccent();
+        ApplyAppAccent();
 
         // 初始化 SQLite 别名与纯音乐映射库
         TaskbarLyrics.Core.Database.SongSearchMapDbContext.InitializeDatabase();
@@ -50,7 +51,7 @@ public partial class App : System.Windows.Application
         UserWantsLyricsVisible = Settings.ShowLyricsOnStartup;
 
         _lyricsWindowHost.ApplySpectrumTuning(_spectrumTuningSettings);
-        _trayService = new TrayService(ToggleLyricsWindow, OpenSettingsWindow, ExitApplication);
+        _trayService = new TrayService(ToggleLyricsWindow, ToggleFloatingWindowMode, IsFloatingWindowModeEnabled, OpenSettingsWindow, ExitApplication);
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
@@ -77,6 +78,19 @@ public partial class App : System.Windows.Application
         Dispatcher.BeginInvoke(() => _trayService?.SetPlayerSource(sourceApp));
     }
 
+    private bool IsFloatingWindowModeEnabled()
+    {
+        return Settings.EnableFloatingWindowMode;
+    }
+
+    private void ToggleFloatingWindowMode()
+    {
+        var nextSettings = Settings.Clone();
+        nextSettings.EnableFloatingWindowMode = !nextSettings.EnableFloatingWindowMode;
+        SaveSettings(nextSettings);
+        _settingsWindow?.ApplyExternalSettings(Settings.Clone());
+    }
+
     private static void ApplyStartWithWindows(bool enabled)
     {
         try
@@ -91,6 +105,7 @@ public partial class App : System.Windows.Application
             if (!enabled)
             {
                 key.DeleteValue(StartupRunValueName, throwOnMissingValue: false);
+                key.DeleteValue(LegacyStartupRunValueName, throwOnMissingValue: false);
                 return;
             }
 
@@ -101,6 +116,7 @@ public partial class App : System.Windows.Application
             }
 
             key.SetValue(StartupRunValueName, $"\"{executablePath}\"", RegistryValueKind.String);
+            key.DeleteValue(LegacyStartupRunValueName, throwOnMissingValue: false);
         }
         catch
         {
@@ -140,6 +156,18 @@ public partial class App : System.Windows.Application
         return changed;
     }
 
+    internal static void ApplyAppAccent()
+    {
+        var theme = IsSystemUsingLightTheme()
+            ? Wpf.Ui.Appearance.ApplicationTheme.Light
+            : Wpf.Ui.Appearance.ApplicationTheme.Dark;
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+            System.Windows.Media.Color.FromRgb(108, 165, 254),
+            theme,
+            systemGlassColor: false,
+            systemAccentColor: false);
+    }
+
     private static bool IsLegacyCustomForeground(string? color)
     {
         var normalized = NormalizeColor(color);
@@ -176,6 +204,7 @@ public partial class App : System.Windows.Application
 
         Dispatcher.BeginInvoke(() =>
         {
+            ApplyAppAccent();
             if (ApplySystemThemeForegroundColor(Settings))
             {
                 _settingsStore?.Save(Settings);

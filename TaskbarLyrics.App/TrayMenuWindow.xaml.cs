@@ -21,19 +21,29 @@ public partial class TrayMenuWindow : Window
     private const int KeyEventKeyUp = 0x0002;
 
     private readonly Action _toggleLyricsWindow;
+    private readonly Action _toggleFloatingWindowMode;
+    private readonly Func<bool> _isFloatingWindowModeEnabled;
     private readonly Action _openSettings;
     private readonly Action _exitApp;
     private readonly DispatcherTimer _closeTimer;
     private int _graceTicks = 3;
 
-    public TrayMenuWindow(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    public TrayMenuWindow(
+        Action toggleLyricsWindow,
+        Action toggleFloatingWindowMode,
+        Func<bool> isFloatingWindowModeEnabled,
+        Action openSettings,
+        Action exitApp)
     {
         InitializeComponent();
         AppIconProvider.ApplyWindowIcon(this);
         ApplyTheme();
         _toggleLyricsWindow = toggleLyricsWindow;
+        _toggleFloatingWindowMode = toggleFloatingWindowMode;
+        _isFloatingWindowModeEnabled = isFloatingWindowModeEnabled;
         _openSettings = openSettings;
         _exitApp = exitApp;
+        UpdateFloatingModeText();
         SourceInitialized += OnSourceInitialized;
         _closeTimer = new DispatcherTimer
         {
@@ -58,9 +68,19 @@ public partial class TrayMenuWindow : Window
         Resources["TrayMenuTextBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(15, 23, 42)
             : Media.Colors.White);
+        Resources["TrayMenuAccentBrush"] = new Media.SolidColorBrush(Media.Color.FromRgb(108, 165, 254));
         Resources["TrayMenuSeparatorBrush"] = new Media.SolidColorBrush(light
             ? Media.Color.FromRgb(218, 226, 237)
             : Media.Color.FromRgb(74, 74, 74));
+    }
+
+    private void UpdateFloatingModeText()
+    {
+        var enabled = _isFloatingWindowModeEnabled();
+        FloatingModeText.Text = enabled
+            ? "悬浮窗模式：开"
+            : "悬浮窗模式：关";
+        FloatingModeMark.Opacity = enabled ? 1.0 : 0.32;
     }
 
     public void ShowAtCursor()
@@ -143,6 +163,14 @@ public partial class TrayMenuWindow : Window
         Close();
         DismissTrayOverflow();
         _toggleLyricsWindow();
+    }
+
+    private void ToggleFloatingModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _toggleFloatingWindowMode();
+        UpdateFloatingModeText();
+        Close();
+        DismissTrayOverflow();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)

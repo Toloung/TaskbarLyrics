@@ -18,7 +18,7 @@ internal sealed class LyricsWindowHost : IDisposable
         _thread = new Thread(() => Run(settings))
         {
             IsBackground = true,
-            Name = "TaskbarLyrics Lyrics UI"
+            Name = "LyricsBar Lyrics UI"
         };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();

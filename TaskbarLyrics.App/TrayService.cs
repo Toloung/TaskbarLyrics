@@ -11,12 +11,17 @@ public sealed class TrayService : IDisposable
     private TrayMenuWindow? _menuWindow;
     private string _activeSourceApp = string.Empty;
 
-    public TrayService(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    public TrayService(
+        Action toggleLyricsWindow,
+        Action toggleFloatingWindowMode,
+        Func<bool> isFloatingWindowModeEnabled,
+        Action openSettings,
+        Action exitApp)
     {
         _icon = AppIconProvider.LoadTrayIcon();
         _notifyIcon = new Forms.NotifyIcon
         {
-            Text = "TaskbarLyrics",
+            Text = "LyricsBar",
             Icon = _icon,
             Visible = true
         };
@@ -27,7 +32,7 @@ public sealed class TrayService : IDisposable
             if (e.Button == Forms.MouseButtons.Right)
             {
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowMenu(toggleLyricsWindow, openSettings, exitApp));
+                    ShowMenu(toggleLyricsWindow, toggleFloatingWindowMode, isFloatingWindowModeEnabled, openSettings, exitApp));
             }
         };
     }
@@ -43,8 +48,8 @@ public sealed class TrayService : IDisposable
         var nextIcon = AppIconProvider.LoadTrayIcon(normalized);
         _notifyIcon.Icon = nextIcon;
         _notifyIcon.Text = string.IsNullOrWhiteSpace(normalized)
-            ? "TaskbarLyrics"
-            : $"TaskbarLyrics - {GetPlayerDisplayName(normalized)}";
+            ? "LyricsBar"
+            : $"LyricsBar - {GetPlayerDisplayName(normalized)}";
         _icon.Dispose();
         _icon = nextIcon;
         _activeSourceApp = normalized;
@@ -58,10 +63,15 @@ public sealed class TrayService : IDisposable
         _icon.Dispose();
     }
 
-    private void ShowMenu(Action toggleLyricsWindow, Action openSettings, Action exitApp)
+    private void ShowMenu(
+        Action toggleLyricsWindow,
+        Action toggleFloatingWindowMode,
+        Func<bool> isFloatingWindowModeEnabled,
+        Action openSettings,
+        Action exitApp)
     {
         _menuWindow?.Close();
-        _menuWindow = new TrayMenuWindow(toggleLyricsWindow, openSettings, exitApp);
+        _menuWindow = new TrayMenuWindow(toggleLyricsWindow, toggleFloatingWindowMode, isFloatingWindowModeEnabled, openSettings, exitApp);
         _menuWindow.Closed += (_, _) => _menuWindow = null;
         _menuWindow.ShowAtCursor();
     }

@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    一键构建 TaskbarLyrics 安装包：dotnet publish + Inno Setup 编译。
+    一键构建 LyricsBar 安装包：dotnet publish + Inno Setup 编译。
 
 .DESCRIPTION
     1. 发布项目到 publish/win-x64（self-contained，不依赖 .NET Runtime）
     2. 从编译输出的 exe 中读取版本号
     3. 调用 ISCC.exe 编译安装包
-    4. 输出到 dist/TaskbarLyrics-{version}-Setup.exe
+    4. 输出到 dist/LyricsBar-{version}-Setup.exe
 
 .PARAMETER Configuration
     构建配置，默认 Release。
@@ -64,7 +64,7 @@ if (-not $SkipPublish) {
 }
 else {
     Write-Host ">>> Skipping publish, using existing: $publishDir" -ForegroundColor Yellow
-    if (-not (Test-Path "$publishDir\TaskbarLyrics.exe")) {
+    if (-not (Test-Path "$publishDir\LyricsBar.exe")) {
         throw "Published exe not found in $publishDir. Remove -SkipPublish or build first."
     }
 }
@@ -72,7 +72,7 @@ else {
 # ── 2. 读取版本号 ──────────────────────────────────────────────────────────
 $appVersion = $AppVersion.Trim()
 if ([string]::IsNullOrWhiteSpace($appVersion)) {
-    $exePath = Join-Path $publishDir "TaskbarLyrics.exe"
+    $exePath = Join-Path $publishDir "LyricsBar.exe"
     try {
         $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
         $appVersion = $versionInfo.FileVersion
@@ -129,7 +129,7 @@ finally {
 }
 
 # ── 5. 完成 ────────────────────────────────────────────────────────────────
-$outputExe = Join-Path $distDir "TaskbarLyrics-$appVersion-Setup.exe"
+$outputExe = Join-Path $distDir "LyricsBar-$appVersion-Setup.exe"
 if (Test-Path $outputExe) {
     Write-Host ">>> Installer created: $outputExe" -ForegroundColor Green
     Write-Host "    Size: $([math]::Round((Get-Item $outputExe).Length / 1MB, 2)) MB" -ForegroundColor Green

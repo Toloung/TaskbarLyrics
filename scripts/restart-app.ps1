@@ -8,8 +8,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solutionPath = Join-Path $repoRoot "TaskbarLyrics.sln"
-$appExe = Join-Path $repoRoot "TaskbarLyrics.App\bin\$Configuration\$Framework\TaskbarLyrics.exe"
-$processName = "TaskbarLyrics"
+$appExe = Join-Path $repoRoot "TaskbarLyrics.App\bin\$Configuration\$Framework\LyricsBar.exe"
+$processName = "LyricsBar"
 
 $processes = Get-Process -Name $processName -ErrorAction SilentlyContinue
 foreach ($process in $processes) {
@@ -38,4 +38,4 @@ if (-not (Test-Path -LiteralPath $appExe)) {
 }
 
 Start-Process -FilePath $appExe -WorkingDirectory (Split-Path -Parent $appExe) -WindowStyle Hidden
-Write-Host "Restarted TaskbarLyrics from $appExe"
+Write-Host "Restarted LyricsBar from $appExe"

@@ -800,7 +800,7 @@ public abstract class LrcLibSmtcLyricProviderBase : ILyricProvider
             Timeout = TimeSpan.FromSeconds(8)
         };
 
-        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "TaskbarLyrics/1.0");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "LyricsBar/1.0");
         return client;
     }
 

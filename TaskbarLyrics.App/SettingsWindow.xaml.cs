@@ -94,7 +94,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
         var userDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TaskbarLyrics",
+            "LyricsBar",
             "WebView2",
             "Settings");
         var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);

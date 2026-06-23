@@ -78,7 +78,7 @@ public sealed class SystemAudioSpectrumService : IDisposable
         _captureThread = new Thread(CaptureLoop)
         {
             IsBackground = true,
-            Name = "TaskbarLyrics Audio Spectrum"
+            Name = "LyricsBar Audio Spectrum"
         };
         _captureThread.SetApartmentState(ApartmentState.MTA);
         _captureThread.Start();

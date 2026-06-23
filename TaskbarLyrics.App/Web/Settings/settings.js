@@ -1,4 +1,4 @@
-const sourceNames = {
+﻿const sourceNames = {
   QQMusic: "QQ音乐",
   Netease: "网易云音乐",
   Kugou: "酷狗音乐",
@@ -284,9 +284,9 @@ function setupEvents() {
       target?.scrollIntoView({ behavior: "smooth", block: "start" });
       target?.animate(
         [
-          { transform: "translateY(0)", borderColor: "rgba(120, 160, 255, .13)" },
-          { transform: "translateY(-2px)", borderColor: "rgba(107, 145, 255, .42)" },
-          { transform: "translateY(0)", borderColor: "rgba(120, 160, 255, .13)" }
+          { transform: "translateY(0)", borderColor: "rgba(108, 165, 254, .13)" },
+          { transform: "translateY(-2px)", borderColor: "rgba(108, 165, 254, .42)" },
+          { transform: "translateY(0)", borderColor: "rgba(108, 165, 254, .13)" }
         ],
         { duration: 280, easing: "ease-out" }
       );

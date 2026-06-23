@@ -1,14 +1,15 @@
-; TaskbarLyrics — Inno Setup 安装脚本
+; LyricsBar — Inno Setup 安装脚本
 ; 使用前先通过 build-installer.ps1 打包，或者手动：
 ;   1. dotnet publish TaskbarLyrics.App/TaskbarLyrics.App.csproj ^
 ;        -c Release -r win-x64 --self-contained true ^
 ;        -p:DebugType=None -p:DebugSymbols=false -o publish\win-x64
 ;   2. ISCC scripts\setup.iss
 
-#define MyAppName "TaskbarLyrics"
-#define MyAppPublisher "TaskbarLyrics"
+#define MyAppName "LyricsBar"
+#define MyAppPublisher "LyricsBar"
 #define MyAppURL "https://github.com/apoint123/TaskbarLyrics"
-#define MyAppExeName "TaskbarLyrics.exe"
+#define MyAppExeName "LyricsBar.exe"
+#define MyLegacyAppExeName "TaskbarLyrics.exe"
 
 ; 版本号从命令行传入，例如 /dMyAppVersion=1.0.0.0
 ; 未传入时使用占位符
@@ -28,7 +29,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=TaskbarLyrics-{#MyAppVersion}-Setup
+OutputBaseFilename=LyricsBar-{#MyAppVersion}-Setup
 Compression=lzma2/ultra
 SolidCompression=yes
 WizardStyle=modern
@@ -67,7 +68,8 @@ const
 
 function IsUpgradeInstall: Boolean;
 begin
-  Result := FileExists(ExpandConstant('{app}\{#MyAppExeName}'));
+  Result := FileExists(ExpandConstant('{app}\{#MyAppExeName}')) or
+            FileExists(ExpandConstant('{app}\{#MyLegacyAppExeName}'));
 end;
 
 function IsTaskbarLyricsRunning: Boolean;
@@ -77,6 +79,12 @@ begin
   Result := Exec(ExpandConstant('{cmd}'),
     '/C tasklist /FI "IMAGENAME eq {#MyAppExeName}" /NH | find /I "{#MyAppExeName}" >NUL',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  if not Result then
+  begin
+    Result := Exec(ExpandConstant('{cmd}'),
+      '/C tasklist /FI "IMAGENAME eq {#MyLegacyAppExeName}" /NH | find /I "{#MyLegacyAppExeName}" >NUL',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  end;
 end;
 
 function CloseTaskbarLyrics: Boolean;
@@ -85,6 +93,10 @@ var
 begin
   Result := Exec(ExpandConstant('{cmd}'),
     '/C taskkill /IM "{#MyAppExeName}" /T /F',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and
+    ((ResultCode = 0) or (ResultCode = 128));
+  Result := Result and Exec(ExpandConstant('{cmd}'),
+    '/C taskkill /IM "{#MyLegacyAppExeName}" /T /F',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and
     ((ResultCode = 0) or (ResultCode = 128));
 end;
@@ -111,20 +123,20 @@ begin
 
   if IsUpgradeInstall then
   begin
-    MsgBox('检测到已安装的 TaskbarLyrics。' + #13#10 +
+    MsgBox('检测到已安装的 {#MyAppName}。' + #13#10 +
            '安装程序将升级现有版本，并保留你的设置、歌词缓存和数据库。',
            mbInformation, MB_OK);
   end;
 
   if IsTaskbarLyricsRunning then
   begin
-    MsgBox('检测到 TaskbarLyrics 正在运行。' + #13#10 +
-           '安装程序将先关闭 TaskbarLyrics.exe，然后继续安装。',
+    MsgBox('检测到 {#MyAppName} 正在运行。' + #13#10 +
+           '安装程序将先关闭正在运行的程序，然后继续安装。',
            mbInformation, MB_OK);
 
     if not CloseTaskbarLyrics then
     begin
-      Result := '无法自动关闭 TaskbarLyrics.exe。请手动退出程序后重新运行安装程序。';
+      Result := '无法自动关闭 {#MyAppName}。请手动退出程序后重新运行安装程序。';
       Exit;
     end;
   end;
@@ -132,7 +144,7 @@ begin
   if IsWebView2Installed then
     Exit;
 
-  if MsgBox('TaskbarLyrics 需要 WebView2 Runtime 来显示歌词窗口。' + #13#10 +
+  if MsgBox('{#MyAppName} 需要 WebView2 Runtime 来显示歌词窗口。' + #13#10 +
             '是否自动下载并安装？' + #13#10#13#10 +
             '选择「是」将自动下载并静默安装。' + #13#10 +
             '选择「否」可稍后自行安装。',

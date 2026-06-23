@@ -4,7 +4,7 @@
                  xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-                 Title="TaskbarLyrics - 设置"
+                 Title="LyricsBar - 设置"
                  Width="1280"
                  Height="860"
                  MinWidth="1080"
@@ -95,7 +95,7 @@
                 Background="#070E1D"
                 MouseLeftButtonDown="CaptionDragArea_MouseLeftButtonDown">
             <TextBlock x:Name="CaptionTitle"
-                       Text="TaskbarLyrics - 设置"
+                       Text="LyricsBar - 设置"
                        Margin="16,0,0,0"
                        FontSize="12"
                        Foreground="#7AFFFFFF"
