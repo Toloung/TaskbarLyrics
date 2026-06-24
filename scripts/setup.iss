@@ -27,6 +27,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+DisableDirPage=no
 AllowNoIcons=yes
 OutputDir=..\dist
 OutputBaseFilename=LyricsBar-{#MyAppVersion}-Setup
