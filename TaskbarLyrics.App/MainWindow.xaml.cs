@@ -753,7 +753,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var useCoverLyricColor = settings.EnableFloatingWindowMode && settings.UseCoverColorBackground;
+        var useCoverLyricColor = settings.EnableFloatingWindowMode
+            ? settings.UseCoverColorBackground
+            : settings.UseCoverColorTaskbarLyrics;
         var backgroundOpacity = Math.Clamp(settings.BackgroundOpacity, 0, 1);
         var stylePayload = new
         {

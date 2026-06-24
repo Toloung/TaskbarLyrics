@@ -68,6 +68,8 @@ public sealed class AppSettings
 
     public bool UseCoverColorBackground { get; set; } = false;
 
+    public bool UseCoverColorTaskbarLyrics { get; set; } = false;
+
     public bool ShowBorder { get; set; } = false;
 
     public bool ShowTextShadow { get; set; } = false;

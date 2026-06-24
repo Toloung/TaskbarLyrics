@@ -26,20 +26,8 @@ internal static class AppIconProvider
 
         using var baseIcon = LoadTrayIcon();
         using var bitmap = new Bitmap(baseIcon.ToBitmap(), new System.Drawing.Size(64, 64));
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
         var accent = GetPlayerAccentColor(sourceApp);
-        using var tintBrush = new SolidBrush(Color.FromArgb(72, accent));
-        using var borderPen = new Pen(Color.FromArgb(235, accent), 7);
-        using var shadowBrush = new SolidBrush(Color.FromArgb(92, 0, 0, 0));
-        using var outerBrush = new SolidBrush(Color.FromArgb(248, 255, 255, 255));
-        using var accentBrush = new SolidBrush(accent);
-        graphics.FillEllipse(tintBrush, 2, 2, 60, 60);
-        graphics.DrawEllipse(borderPen, 5, 5, 54, 54);
-        graphics.FillEllipse(shadowBrush, 32, 34, 29, 29);
-        graphics.FillEllipse(outerBrush, 30, 30, 30, 30);
-        graphics.FillEllipse(accentBrush, 34, 34, 22, 22);
+        TintIconBody(bitmap, accent);
 
         var handle = bitmap.GetHicon();
         try
@@ -68,7 +56,7 @@ internal static class AppIconProvider
     {
         if (sourceApp.Equals("QQMusic", StringComparison.OrdinalIgnoreCase))
         {
-            return Color.FromArgb(41, 182, 246);
+            return Color.FromArgb(0, 194, 122);
         }
 
         if (sourceApp.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
@@ -87,6 +75,45 @@ internal static class AppIconProvider
         }
 
         return Color.FromArgb(108, 165, 254);
+    }
+
+    private static void TintIconBody(Bitmap bitmap, Color accent)
+    {
+        var darkAccent = Mix(Color.FromArgb(8, 20, 36), accent, 0.54);
+        var lightAccent = Mix(Color.White, accent, 0.56);
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.A < 24 || !ShouldTint(pixel))
+                {
+                    continue;
+                }
+
+                var brightness = (pixel.R + pixel.G + pixel.B) / (255d * 3d);
+                var tinted = Mix(darkAccent, lightAccent, Math.Clamp(brightness * 1.18, 0, 1));
+                bitmap.SetPixel(x, y, Color.FromArgb(pixel.A, tinted));
+            }
+        }
+    }
+
+    private static bool ShouldTint(Color pixel)
+    {
+        var max = Math.Max(pixel.R, Math.Max(pixel.G, pixel.B));
+        var min = Math.Min(pixel.R, Math.Min(pixel.G, pixel.B));
+        var brightness = (pixel.R + pixel.G + pixel.B) / 3;
+        return brightness < 150 || (brightness < 205 && max - min > 18 && pixel.B >= pixel.R);
+    }
+
+    private static Color Mix(Color from, Color to, double amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        return Color.FromArgb(
+            (int)Math.Round(from.R + (to.R - from.R) * amount),
+            (int)Math.Round(from.G + (to.G - from.G) * amount),
+            (int)Math.Round(from.B + (to.B - from.B) * amount));
     }
 
     [DllImport("user32.dll", SetLastError = true)]

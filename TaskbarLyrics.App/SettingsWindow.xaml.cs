@@ -208,6 +208,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
             ShowBackground = _settings.ShowBackground,
             BackgroundOpacity = _settings.BackgroundOpacity,
             UseCoverColorBackground = _settings.UseCoverColorBackground,
+            UseCoverColorTaskbarLyrics = _settings.UseCoverColorTaskbarLyrics,
             ShowBorder = _settings.ShowBorder,
             ShowTextShadow = _settings.ShowTextShadow,
             EnableFloatingWindowMode = _settings.EnableFloatingWindowMode,
@@ -378,6 +379,9 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
                 break;
             case "useCoverColorBackground":
                 _settings.UseCoverColorBackground = ReadBool(element, _settings.UseCoverColorBackground);
+                break;
+            case "useCoverColorTaskbarLyrics":
+                _settings.UseCoverColorTaskbarLyrics = ReadBool(element, _settings.UseCoverColorTaskbarLyrics);
                 break;
             case "showBorder":
                 _settings.ShowBorder = ReadBool(element, _settings.ShowBorder);
@@ -621,6 +625,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         target.ShowBackground = source.ShowBackground;
         target.BackgroundOpacity = source.BackgroundOpacity;
         target.UseCoverColorBackground = source.UseCoverColorBackground;
+        target.UseCoverColorTaskbarLyrics = source.UseCoverColorTaskbarLyrics;
         target.ShowBorder = source.ShowBorder;
         target.ShowTextShadow = source.ShowTextShadow;
         target.EnableFloatingWindowMode = source.EnableFloatingWindowMode;
@@ -853,6 +858,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         public bool ShowBackground { get; set; }
         public double BackgroundOpacity { get; set; }
         public bool UseCoverColorBackground { get; set; }
+        public bool UseCoverColorTaskbarLyrics { get; set; }
         public bool ShowBorder { get; set; }
         public bool ShowTextShadow { get; set; }
         public bool EnableFloatingWindowMode { get; set; }
