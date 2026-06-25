@@ -11,8 +11,12 @@ const coverEl = document.getElementById("cover");
 const coverImageEl = document.getElementById("coverImage");
 const coverImageNextEl = document.getElementById("coverImageNext");
 const coverFallbackEl = document.getElementById("coverFallback");
+const trackInfoEl = document.getElementById("trackInfo");
+const trackTitleEl = document.getElementById("trackTitle");
+const trackArtistEl = document.getElementById("trackArtist");
 const root = document.documentElement;
 const spectrumBarEls = Array.from(document.querySelectorAll(".spectrum span"));
+const lyricLineEls = [currentLineEl, nextLineEl, incomingLineEl];
 
 let displayedCurrent = currentLineTextEl?.textContent || "";
 let displayedNext = nextLineTextEl?.textContent || "";
@@ -34,6 +38,7 @@ let lastLineProgress = Number.NaN;
 let lastCurrentLineIndex = -1;
 let lastTrackId = "";
 let metricsUpdatePending = false;
+let marqueeUpdateFrame = 0;
 const transitionDurationMs = 560;
 const trackSwitchSearchMinVisibleMs = 900;
 const coverSwapDelayMs = 180;
@@ -115,6 +120,7 @@ function setCurrentLine(line) {
     currentLineTextEl.textContent = safe;
   }
   displayedCurrent = safe;
+  scheduleMarqueeUpdate();
 }
 
 function setSecondaryLine(line) {
@@ -123,11 +129,84 @@ function setSecondaryLine(line) {
     nextLineTextEl.textContent = safe;
   }
   displayedNext = safe;
+  scheduleMarqueeUpdate();
 }
 
 function setIncomingLine(line) {
   if (incomingLineTextEl) {
     incomingLineTextEl.textContent = toDisplayLine(line, " ");
+  }
+  scheduleMarqueeUpdate();
+}
+
+function scheduleMarqueeUpdate() {
+  if (marqueeUpdateFrame) {
+    return;
+  }
+
+  marqueeUpdateFrame = window.requestAnimationFrame(() => {
+    marqueeUpdateFrame = 0;
+    updateMarqueeLines();
+  });
+}
+
+function updateMarqueeLines() {
+  for (const line of lyricLineEls) {
+    updateLineMarquee(line);
+  }
+}
+
+function updateLineMarquee(line) {
+  if (!line) {
+    return;
+  }
+
+  const text = line.querySelector(".line-text");
+  if (!text) {
+    return;
+  }
+
+  line.classList.remove("marquee");
+  line.style.setProperty("--marquee-distance", "0px");
+  line.style.setProperty("--marquee-duration", "8s");
+  text.style.animation = "none";
+  void text.offsetWidth;
+  text.style.animation = "";
+
+  const availableWidth = Math.max(0, line.clientWidth);
+  const contentWidth = Math.ceil(text.scrollWidth);
+  const overflow = contentWidth - availableWidth;
+  if (availableWidth <= 0 || overflow <= 4) {
+    return;
+  }
+
+  const distance = Math.ceil(overflow);
+  const duration = Math.max(6.5, Math.min(18, 4.8 + (distance / 24)));
+  line.style.setProperty("--marquee-distance", `${distance}px`);
+  line.style.setProperty("--marquee-duration", `${duration.toFixed(2)}s`);
+  line.classList.add("marquee");
+}
+
+function setTrackInfo(title, artist) {
+  const safeTitle = (title ?? "").toString().trim();
+  const safeArtist = (artist ?? "").toString().trim();
+  const hasInfo = safeTitle.length > 0 &&
+    safeTitle.toLowerCase() !== "unknown title";
+
+  if (trackTitleEl) {
+    trackTitleEl.textContent = hasInfo ? safeTitle : "";
+  }
+
+  if (trackArtistEl) {
+    trackArtistEl.textContent = hasInfo &&
+      safeArtist.length > 0 &&
+      safeArtist.toLowerCase() !== "unknown artist"
+        ? safeArtist
+        : "";
+  }
+
+  if (trackInfoEl) {
+    trackInfoEl.classList.toggle("has-info", hasInfo);
   }
 }
 
@@ -700,6 +779,7 @@ function updateMetrics() {
   root.style.setProperty("--current-size", `${currentSize.toFixed(2)}px`);
   root.style.setProperty("--next-size", `${nextSize.toFixed(2)}px`);
   setTrackOffset(0);
+  scheduleMarqueeUpdate();
 }
 
 function finalizeTransition(promotedCurrent, upcomingNext, progress, promotedLineIndex = -1) {
@@ -765,6 +845,7 @@ function startTransition(newCurrent, newNext, progress, currentLineIndex = -1) {
   if (nextLineTextEl) {
     nextLineTextEl.textContent = promoted;
   }
+  scheduleMarqueeUpdate();
   setIncomingLine(upcoming);
   currentLineEl.style.opacity = "";
   nextLineEl.style.opacity = "";
@@ -830,6 +911,10 @@ if (typeof ResizeObserver !== "undefined") {
 }
 
 window.taskbarLyrics = {
+  setTrackInfo(title, artist) {
+    setTrackInfo(title, artist);
+  },
+
   setLyrics(current, next, progress, currentLineIndex, trackId, isPureMusic, isPlaying) {
     const safeCurrent = toDisplayLine(current, SEARCHING_TEXT);
     const safeNext = toDisplayLine(next, " ");

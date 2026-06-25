@@ -37,6 +37,8 @@ public partial class MainWindow : Window
     private string _nextLine = "等待歌词...";
     private string? _lastCoverTrackId;
     private string? _currentCoverVisualTrackId;
+    private string _currentTrackTitle = string.Empty;
+    private string _currentTrackArtist = string.Empty;
     private string? _currentCoverDataUri;
     private string _currentCoverFallbackText = "♫";
     private string _currentCoverFallbackColorCss = "rgba(67, 160, 71, 1)";
@@ -370,6 +372,7 @@ public partial class MainWindow : Window
                 app.UpdateTrayPlayerSource(snapshot.Track?.SourceApp);
             }
 
+            UpdateTrackInfo(snapshot.Track);
             UpdateCover(snapshot);
 
             var frame = await _lyricSyncService.GetDisplayFrameAsync(snapshot);
@@ -393,6 +396,7 @@ public partial class MainWindow : Window
             UpdateLyricLines(current, next, frame.LineProgress);
             _isCurrentFramePureMusic = frame.IsPureMusic && _enablePureMusicSpectrum;
             _isCurrentPlaybackPlaying = snapshot.IsPlaying;
+            PushTrackInfoToWebView();
             PushLyricsToWebView(current, next, frame.LineProgress, frame.CurrentLineIndex, _lastWebTrackId, _isCurrentFramePureMusic, snapshot.IsPlaying);
         }
         catch (Exception ex)
@@ -402,6 +406,7 @@ public partial class MainWindow : Window
             _nextLine = string.Empty;
             _isCurrentFramePureMusic = false;
             _isCurrentPlaybackPlaying = false;
+            PushTrackInfoToWebView();
             PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
             Debug.WriteLine(ex);
         }
@@ -456,6 +461,12 @@ public partial class MainWindow : Window
     {
         _currentLine = current;
         _nextLine = next;
+    }
+
+    private void UpdateTrackInfo(TrackInfo? track)
+    {
+        _currentTrackTitle = track?.Title?.Trim() ?? string.Empty;
+        _currentTrackArtist = track?.Artist?.Trim() ?? string.Empty;
     }
 
     private void UpdateCover(PlaybackSnapshot snapshot)
@@ -586,6 +597,19 @@ public partial class MainWindow : Window
         var isPureMusicJson = JsonSerializer.Serialize(isPureMusic);
         var isPlayingJson = JsonSerializer.Serialize(isPlaying);
         var script = $"window.taskbarLyrics?.setLyrics({currentJson}, {nextJson}, {progressJson}, {lineIndexJson}, {trackIdJson}, {isPureMusicJson}, {isPlayingJson});";
+        _ = ExecuteWebScriptAsync(script);
+    }
+
+    private void PushTrackInfoToWebView()
+    {
+        if (!_isWebViewReady || !_isWebDocumentReady || _isShowingWebErrorPage)
+        {
+            return;
+        }
+
+        var titleJson = JsonSerializer.Serialize(_currentTrackTitle);
+        var artistJson = JsonSerializer.Serialize(_currentTrackArtist);
+        var script = $"window.taskbarLyrics?.setTrackInfo({titleJson}, {artistJson});";
         _ = ExecuteWebScriptAsync(script);
     }
 
@@ -742,6 +766,7 @@ public partial class MainWindow : Window
         }
 
         PushLyricsToWebView(_currentLine, _nextLine, 0, _lastWebCurrentLineIndex, _lastWebTrackId, false, false);
+        PushTrackInfoToWebView();
         PushCoverToWebView();
         PushSpectrumTuningToWebView(_spectrumTuningSettings);
     }
